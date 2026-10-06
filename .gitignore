@@ -1,0 +1,11 @@
+.DS_Store
+.idea/
+.vscode/
+*.class
+build/
+target/
+.env
+.env.*
+!.env.example
+secrets.h
+config.local.*
