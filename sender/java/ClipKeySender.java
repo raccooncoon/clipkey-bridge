@@ -89,7 +89,8 @@ public class ClipKeySender {
             }
             System.out.println("작업 등록 완료. 보드 버튼을 눌러 입력 승인하세요. 입력 완료 응답은 아닙니다.");
         } catch (java.io.IOException e) {
-            throw new IllegalStateException("응답 확인 불가. 자동 재시도하지 않습니다. 대상 입력과 요청 ID를 확인하세요.");
+            throw new IllegalStateException("응답 확인 불가 (" + e.getClass().getSimpleName() + ": " + e.getMessage()
+                    + "). 자동 재시도하지 않습니다. 대상 입력과 요청 ID를 확인하세요.");
         }
     }
 }

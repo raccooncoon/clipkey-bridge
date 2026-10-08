@@ -2,7 +2,33 @@
 
 첫 구현은 공식 Arduino-ESP32 USB HID 예제를 바탕으로 한다.
 
-## M1: 버튼 → `Hello World!` (`clipkey_hello/`)
+## M2: 무선 작업 수신 (`clipkey_bridge/`) — 진행 중
+
+M1 검증 후 본 펌웨어는 `clipkey_bridge/`에서 이어 간다. `clipkey_hello/`는 M1 산출물로 유지한다.
+
+### M2.1 Wi-Fi 다중 SSID + mDNS + `/api/v1/status` + 토큰 인증
+
+- `secrets.h.example`을 `secrets.h`로 복사해 Wi-Fi 목록(집/회사/폰 핫스팟 등, 2.4GHz)과 토큰을 넣는다. `secrets.h`는 커밋되지 않는다.
+- 부팅·재접속 시 목록을 스캔해 신호가 가장 좋은 SSID에 붙는다. 새 장소를 추가하려면 `secrets.h` 수정 후 재업로드한다(런타임 설정은 M4).
+- mDNS로 `http://clipkey.local`에 응답한다. IP를 몰라도 된다. mDNS가 막힌 네트워크에서는 시리얼에 찍힌 IP를 쓴다.
+- 토큰은 `openssl rand -hex 16` 같은 랜덤 문자열이면 된다. 보드 `secrets.h`와 송신 PC `CLIPKEY_TOKEN` 환경변수에 같은 값을 둔다.
+- 개발 빌드는 **USB CDC On Boot = Enabled**. HID 키보드 + 시리얼 복합 장치로 동작해 IP를 시리얼로 확인할 수 있고, 재업로드 시 BOOT+RESET이 필요 없다.
+- `/api/v1/` 아래는 모든 경로에서 `Authorization: Bearer <token>`을 먼저 검사한다. 토큰이 틀리면 경로 존재 여부와 무관하게 401.
+- 링크로컬 IPv6를 켠다. 없으면 mDNS AAAA 질의가 응답 없이 타임아웃돼 macOS/Java의 `clipkey.local` 해석이 5초 걸리고 Java CLI는 연결 타임아웃으로 실패한다(실측). 켜면 0.01초.
+- 이 단계는 작업 등록·타이핑을 하지 않는다. 버튼도 아직 사용하지 않는다.
+
+실측 결과 (2026-10-08): 저장된 SSID 접속·시리얼 IP 출력, `clipkey.local` 해석(IPv4/IPv6), 토큰 없음 401, 틀린 토큰 401, 올바른 토큰 200, 미존재 경로 401(무토큰)/404(토큰), HID 키보드 유지 — 모두 통과.
+
+```bash
+cp firmware/clipkey_bridge/secrets.h.example firmware/clipkey_bridge/secrets.h   # 값 채우기
+arduino-cli compile --fqbn esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=cdc firmware/clipkey_bridge
+arduino-cli upload  --fqbn esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=cdc --port /dev/cu.usbmodem1101 firmware/clipkey_bridge
+arduino-cli monitor -p /dev/cu.usbmodem1101 -c baudrate=115200           # [wifi] connected ssid=... ip=... 확인
+curl -i http://clipkey.local/api/v1/status -H "Authorization: Bearer <token>"   # 200 JSON
+curl -i http://clipkey.local/api/v1/status                                       # 401
+```
+
+## M1: 버튼 → `Hello World!` (`clipkey_hello/`) — 완료
 
 BOOT 버튼(GPIO0)을 누르면 USB HID 키보드로 `Hello World!`를 한 번 입력한다.
 
@@ -39,7 +65,12 @@ arduino-cli upload  --fqbn esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default
 
 포트 이름은 `ls /dev/cu.usbmodem*`로 확인한다.
 
-USB-OTG 모드에서는 업로드 후 보드가 키보드로 재열거되어 시리얼 포트가 사라질 수 있다. 재업로드는 BOOT를 누른 채 RESET(또는 USB 재연결)으로 다운로드 모드에 진입한 뒤 진행한다.
+### 업로드와 리셋 동작 (실측)
+
+- CDC Off 빌드(M1)는 업로드 후 시리얼 포트가 사라진다. 재업로드는 BOOT를 누른 채 RESET으로 다운로드 모드에 진입한 뒤 진행한다.
+- **수동(BOOT+RESET)으로 다운로드 모드에 들어가 플래시하면 esptool의 자동 리셋이 듣지 않아 보드가 다운로드 모드에 남는다.** 업로드 후 RESET을 한 번 눌러야 앱이 뜬다. Mac에서 장치 이름이 `USB JTAG_serial debug unit`이면 아직 부트로더, `ESP32S3_DEV`면 앱이다.
+- CDC On 빌드(M2~)는 `arduino-cli upload`가 1200bps touch로 자동 진입한다. `No serial data received`가 나오면 포트가 바뀌는 사이 실패한 것이다. 포트에 1200bps를 한 번 설정해 다운로드 모드로 보낸 뒤 나타나는 `/dev/cu.usbmodem1101`로 다시 업로드하면 된다. 이 경우 자동 리셋은 정상 동작한다.
+- 시리얼 로그는 부팅 직후 한 번 찍힌다. 포트가 재열거되면 리더가 끊기므로, 리셋 전후를 보려면 포트를 다시 여는 리더가 필요하다.
 
 ### 실물 테스트 체크리스트
 
