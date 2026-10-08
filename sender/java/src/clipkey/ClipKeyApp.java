@@ -34,6 +34,8 @@ import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.UIManager;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 /** 창 모드. 인자가 있으면 CLI(ClipKeySender)로 넘긴다. */
 public final class ClipKeyApp {
@@ -60,6 +62,8 @@ public final class ClipKeyApp {
     private String text = "";
     private String activeJob = null;
     private boolean polling = false;
+    private boolean loading = false;  // 프로그램이 미리보기를 채우는 중 (편집으로 세지 않음)
+    private boolean edited = false;   // 클립보드를 읽은 뒤 사용자가 고쳤는가
 
     public static void main(String[] args) {
         if (args.length > 0) {
@@ -72,9 +76,13 @@ public final class ClipKeyApp {
     }
 
     private void show() {
-        preview.setEditable(false);
         preview.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
         preview.setTabSize(4);
+        preview.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { onEdit(); }
+            @Override public void removeUpdate(DocumentEvent e) { onEdit(); }
+            @Override public void changedUpdate(DocumentEvent e) { onEdit(); }
+        });
         progress.setStringPainted(true);
         progress.setString("");
         cancel.setEnabled(false);
@@ -114,7 +122,8 @@ public final class ClipKeyApp {
         send.addActionListener(e -> submit());
         cancel.addActionListener(e -> cancelJob());
         frame.addWindowListener(new WindowAdapter() {
-            @Override public void windowActivated(WindowEvent e) { if (activeJob == null) readClipboard(); }
+            // 편집 중인 내용은 창을 오가도 덮어쓰지 않는다. 되돌리려면 '클립보드 다시 읽기'.
+            @Override public void windowActivated(WindowEvent e) { if (activeJob == null && !edited) readClipboard(); }
         });
 
         frame.setContentPane(root);
@@ -140,13 +149,26 @@ public final class ClipKeyApp {
     }
 
     private void setText(String t) {
-        text = t;
+        loading = true;
         preview.setText(t);
         preview.setCaretPosition(0);
+        loading = false;
+        edited = false;
+        updateText(t);
+    }
+
+    private void onEdit() {
+        if (loading) return;
+        edited = true;
+        updateText(ClipKeyText.normalize(preview.getText()));
+    }
+
+    private void updateText(String t) {
+        text = t;
         String problem = ClipKeyText.problem(t);
         boolean ok = problem == null;
         info.setForeground(ok ? UIManager.getColor("Label.foreground") : new Color(0xB00020));
-        info.setText(ok ? t.length() + "자, " + (t.split("\n", -1).length) + "줄" : problem);
+        info.setText((ok ? t.length() + "자, " + (t.split("\n", -1).length) + "줄" : problem) + (edited ? "  (편집됨)" : ""));
         send.setEnabled(ok && activeJob == null);
     }
 
@@ -221,6 +243,7 @@ public final class ClipKeyApp {
         send.setEnabled(!busy && ClipKeyText.problem(text) == null);
         cancel.setEnabled(busy);
         reload.setEnabled(!busy);
+        preview.setEditable(!busy);
         enter.setEnabled(!busy);
         auto.setEnabled(!busy);
         delay.setEnabled(!busy);
