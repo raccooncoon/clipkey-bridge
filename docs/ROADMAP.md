@@ -8,8 +8,8 @@
 
 ## M1 — USB HID 첫 성공
 
-- [ ] 칩, Flash/PSRAM 용량, Native USB 배선, BOOT/LED 핀 확인
-- [x] Arduino-ESP32 HID 펌웨어 빌드, 사용한 정확한 버전 기록 (esp32 3.3.2, 컴파일만 확인)
+- [x] 칩, Flash/PSRAM 용량, Native USB 배선 확인 (ESP32-S3, 4MB/2MB, Native USB 직결) — BOOT/LED 핀은 실측 대기
+- [x] Arduino-ESP32 HID 펌웨어 빌드, 사용한 정확한 버전 기록 (esp32 3.3.2, 컴파일·업로드·키보드 인식 확인)
 - [ ] 키보드 인식 후 버튼을 누르면 Hello World 입력 — 펌웨어 작성(`firmware/clipkey_hello`), 실물 검증 대기
 - [ ] 대문자, 숫자, 모든 ASCII 기호와 반복 문자 검증
 

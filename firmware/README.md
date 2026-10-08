@@ -13,9 +13,18 @@ BOOT 버튼(GPIO0)을 누르면 USB HID 키보드로 `Hello World!`를 한 번 �
 
 ### Arduino IDE 설정
 
+### 확인된 보드 정보 (2026-10-08, Mac 실측)
+
 | 항목 | 값 |
 |---|---|
-| 보드 패키지 | esp32 by Espressif 3.3.2 (컴파일 확인 버전) |
+| 칩 | ESP32-S3, 내장 Flash 4MB (Quad), 내장 PSRAM 2MB |
+| USB 포트 | Native USB 직결. 펌웨어 전에는 `USB JTAG/serial debug unit`(0x303A:0x1001)로 인식 |
+| 업로드 | `arduino-cli upload --port /dev/cu.usbmodemXXXX`로 추가 배선 없이 성공 |
+| 업로드 후 | HID 키보드 `ESP32S3_DEV`로 재열거, 시리얼 포트 사라짐 |
+
+| 항목 | 값 |
+|---|---|
+| 보드 패키지 | esp32 by Espressif 3.3.2 (컴파일·업로드 확인 버전) |
 | Board | ESP32S3 Dev Module (실제 보드 확인 후 조정) |
 | USB Mode | **USB-OTG (TinyUSB)** — 기본값 Hardware CDC면 `#error`로 빌드 중단 |
 | USB CDC On Boot | Disabled |
@@ -23,8 +32,12 @@ BOOT 버튼(GPIO0)을 누르면 USB HID 키보드로 `Hello World!`를 한 번 �
 `arduino-cli`로 빌드할 때:
 
 ```bash
+arduino-cli core install esp32:esp32@3.3.2 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
 arduino-cli compile --fqbn esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default firmware/clipkey_hello
+arduino-cli upload  --fqbn esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default --port /dev/cu.usbmodem1101 firmware/clipkey_hello
 ```
+
+포트 이름은 `ls /dev/cu.usbmodem*`로 확인한다.
 
 USB-OTG 모드에서는 업로드 후 보드가 키보드로 재열거되어 시리얼 포트가 사라질 수 있다. 재업로드는 BOOT를 누른 채 RESET(또는 USB 재연결)으로 다운로드 모드에 진입한 뒤 진행한다.
 
