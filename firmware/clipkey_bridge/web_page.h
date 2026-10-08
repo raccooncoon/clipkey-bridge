@@ -10,17 +10,18 @@ static const char INDEX_HTML[] PROGMEM = R"HTML(<!doctype html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>ClipKey Bridge</title>
 <style>
+/* iOS Safari 는 입력 요소 글자가 16px 미만이면 포커스 시 자동 확대한다. 입력 요소는 모두 16px 이상으로 둔다. */
 :root{--bg:#f5f5f7;--fg:#1d1d1f;--mute:#6e6e73;--card:#fff;--line:#d2d2d7;--acc:#0a84ff;--err:#d70015;--ok:#34c759}
 @media(prefers-color-scheme:dark){:root{--bg:#000;--fg:#f5f5f7;--mute:#98989d;--card:#1c1c1e;--line:#3a3a3c}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:max(12px,env(safe-area-inset-top)) 12px 24px}
 h1{font-size:18px;margin:4px 0 10px;display:flex;justify-content:space-between;align-items:center}
 #dev{font-size:13px;color:var(--mute);font-weight:400}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
-textarea{width:100%;height:38vh;font:14px ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg);color:var(--fg);resize:vertical;tab-size:4}
+textarea{width:100%;height:38vh;font:16px ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg);color:var(--fg);resize:vertical;tab-size:4}
 #info{font-size:13px;color:var(--mute);min-height:18px;margin-top:6px}#info.err{color:var(--err)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px}
 label{font-size:14px;display:flex;align-items:center;gap:4px}
-input[type=number],input[type=password]{font-size:15px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
+input[type=number],input[type=password]{font-size:16px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
 input[type=number]{width:70px}input[type=password]{flex:1;min-width:120px}
 button{font-size:16px;padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg)}
 button.primary{background:var(--acc);color:#fff;border-color:var(--acc)}button:disabled{opacity:.4}
