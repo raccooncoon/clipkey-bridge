@@ -17,7 +17,8 @@
 
 ## M2 — 무선 작업 수신
 
-- [ ] Wi-Fi 다중 SSID 연결, mDNS `clipkey.local`, 토큰 인증 (M2.1 구현, 실물 검증 대기), 크기/문자/옵션 검증
+- [x] Wi-Fi 다중 SSID 연결, mDNS `clipkey.local`(IPv4/IPv6), 토큰 인증 — M2.1 실물 검증 완료
+- [ ] 크기/문자/옵션 검증
 - [ ] v0.1 작업 등록·상태·취소 엔드포인트
 - [ ] 대기 60초 만료, 버튼 승인/중단, press/release
 - [ ] USB 분리/네트워크 단절 처리, 중복 ID 방지

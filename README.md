@@ -56,6 +56,8 @@ java sender/java/ClipKeySender.java --send
 java sender/java/ClipKeySender.java --send --enter --delay-ms 30
 ```
 
+macOS에서 처음 실행하면 "java가 로컬 네트워크의 기기를 찾고 연결하려고 합니다" 알림이 뜬다. 허용하지 않으면 `No route to host`로 실패한다. 나중에 바꾸려면 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 java를 켠다.
+
 `202` 응답은 대기 작업 등록이며 입력 완료가 아니다. 보드 버튼 승인 후 시작한다.
 통신 실패 시 자동 재전송하지 않는다. 대상 PC에서 입력 상태를 확인한다.
 

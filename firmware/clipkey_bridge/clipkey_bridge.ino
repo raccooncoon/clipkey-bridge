@@ -117,6 +117,8 @@ void setupUsb() {
 void setupWifi() {
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(HOSTNAME);
+  // 링크로컬 IPv6 를 켜서 mDNS 가 AAAA 에도 즉시 답하게 한다. 없으면 macOS/Java 가 AAAA 타임아웃(약 5초)까지 기다린다.
+  WiFi.enableIPv6();
   WiFi.onEvent(onWifiEvent);
   for (const WifiNetwork& n : WIFI_NETWORKS) wifiMulti.addAP(n.ssid, n.password);
 }
