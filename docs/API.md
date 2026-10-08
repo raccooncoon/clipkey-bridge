@@ -23,7 +23,7 @@
 
 ## 상태와 취소
 
-`GET /api/v1/jobs/{requestId}`: `requestId`, `state`, `typedCharacters`, `totalCharacters`, `error` 반환.
+`GET /api/v1/jobs/{requestId}`: `requestId`, `state`, `typedCharacters`, `totalCharacters`, `error` 반환. `error`는 없으면 `null`, 있으면 `expired`(대기 만료), `button`(버튼 중단), `cancelled`(API 취소), `usb_disconnected`.
 완료는 HID 보고서 전송 완료를 뜻하며 대상 앱에 정확히 표시되었음을 보장하지 않는다.
 
 `POST /api/v1/jobs/{requestId}/cancel`: 작업 취소, 키 해제. 이미 입력된 문자를 되돌리지는 않는다.
@@ -34,14 +34,16 @@
 
 ## 실패와 중복
 
+오류 응답은 `{"error":"<code>"}` 형식이다.
+
 | 응답 | 의미 |
 |---|---|
-| 400 | 잘못된 문자, 빈 본문, 잘못된 옵션 또는 UUID |
-| 401 | 인증 실패 |
-| 404 | 작업이 없거나 상태 보관 기간 만료 |
-| 409 | 다른 작업 실행/대기 중 또는 동일 ID에 다른 내용 |
-| 413 | 4,096바이트 초과 |
-| 503 | USB HID 준비 안 됨 |
+| 400 | `invalid_request_id`, `empty_body`, `unsupported_character`, `invalid_option` |
+| 401 | `unauthorized` |
+| 404 | `not_found` — 작업이 없거나 상태 보관 기간 만료 |
+| 409 | `busy` — 다른 작업 실행/대기 중, `request_id_reused` — 동일 ID에 다른 내용 |
+| 413 | `too_large` — 4,096바이트 초과 |
+| 503 | `usb_not_ready` — USB HID 준비 안 됨, `history_full` — 보관 공간 부족 |
 
 같은 ID와 같은 본문/옵션의 요청은 기존 작업을 반환하고 다시 입력하지 않는다. 최근 최대 16개 ID와 요청 해시를 RAM에 10분 보관한다. 재부팅하면 사라지므로 영구적인 exactly-once 보장은 없다. 이미 입력 중인 작업은 보존하고 보관 공간이 부족하면 새 요청을 503으로 거절한다.
 

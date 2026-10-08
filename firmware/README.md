@@ -6,6 +6,15 @@
 
 M1 검증 후 본 펌웨어는 `clipkey_bridge/`에서 이어 간다. `clipkey_hello/`는 M1 산출물로 유지한다.
 
+### M2.2 작업 등록 → 버튼 승인 → 타이핑
+
+- `POST /api/v1/type` 로 등록된 작업은 WAITING 으로 60초 대기한다. BOOT 를 누르면 TYPING, 다시 누르면 CANCELLED.
+- 타이핑은 `loop()` 에서 한 글자씩 진행하므로 입력 중에도 상태 조회·취소 요청이 처리된다.
+- 완료·취소·만료·USB 끊김 모두 `releaseAll()` 로 끝난다. 원문은 작업이 끝나는 즉시 메모리에서 지운다.
+- 최근 16개 요청 ID 와 요청 해시를 10분 보관한다. 같은 요청 재전송은 기존 작업을 돌려주고(202), 같은 ID 에 다른 내용은 409.
+- 실측(2026-10-08, curl): 등록 202 / 조회 200 / 중복 202 / ID 재사용 409 / 실행 중 등록 409 / 취소 200 / UUID·빈 본문·한글·옵션 오류 400 / 4097B 413 / 4096B 202 / 미존재 404 / 60초 만료 CANCELLED(expired). 실제 타이핑(2026-10-08): 80자(대소문자·숫자·반복·Tab·LF·전 ASCII 기호·추가 Enter) TextEdit 에 정확히 입력, COMPLETED 80/80. 버튼 중단: 2,819자 작업을 TYPING 중 BOOT 로 중단 → CANCELLED(button), typed=701 이 화면 출력과 정확히 일치.
+- 업로드는 `firmware/tools/upload.sh clipkey_bridge` 로 한다(컴파일 + 1200bps touch 폴백).
+
 ### M2.1 Wi-Fi 다중 SSID + mDNS + `/api/v1/status` + 토큰 인증
 
 - `secrets.h.example`을 `secrets.h`로 복사해 Wi-Fi 목록(집/회사/폰 핫스팟 등, 2.4GHz)과 토큰을 넣는다. `secrets.h`는 커밋되지 않는다.
