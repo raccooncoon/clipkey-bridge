@@ -34,6 +34,8 @@ import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.UIManager;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 /** 창 모드. 인자가 있으면 CLI(ClipKeySender)로 넘긴다. */
 public final class ClipKeyApp {
@@ -47,6 +49,7 @@ public final class ClipKeyApp {
     private final JCheckBox auto = new JCheckBox("버튼 없이 2초 후 자동 입력", Settings.autoStart());
     private final JSpinner delay = new JSpinner(new SpinnerNumberModel(Settings.delayMs(), 10, 100, 10));
     private final JProgressBar progress = new JProgressBar(0, 1);
+    private final JLabel status = new JLabel(" ");  // 진행 상태 문구. 바 위에 그리면 겹쳐 보여 따로 둔다
     private final JButton reload = new JButton("클립보드 다시 읽기");
     private final JButton send = new JButton("보내기");
     private final JButton cancel = new JButton("취소");
@@ -60,6 +63,8 @@ public final class ClipKeyApp {
     private String text = "";
     private String activeJob = null;
     private boolean polling = false;
+    private boolean loading = false;  // 프로그램이 미리보기를 채우는 중 (편집으로 세지 않음)
+    private boolean edited = false;   // 클립보드를 읽은 뒤 사용자가 고쳤는가
 
     public static void main(String[] args) {
         if (args.length > 0) {
@@ -72,11 +77,13 @@ public final class ClipKeyApp {
     }
 
     private void show() {
-        preview.setEditable(false);
         preview.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
         preview.setTabSize(4);
-        progress.setStringPainted(true);
-        progress.setString("");
+        preview.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { onEdit(); }
+            @Override public void removeUpdate(DocumentEvent e) { onEdit(); }
+            @Override public void changedUpdate(DocumentEvent e) { onEdit(); }
+        });
         cancel.setEnabled(false);
 
         JPanel top = new JPanel(new BorderLayout());
@@ -98,7 +105,7 @@ public final class ClipKeyApp {
 
         JPanel bottom = new JPanel();
         bottom.setLayout(new BoxLayout(bottom, BoxLayout.Y_AXIS));
-        for (var c : new java.awt.Component[]{info, options, progress, buttons}) {
+        for (var c : new java.awt.Component[]{info, options, progress, status, buttons}) {
             if (c instanceof JPanel p) p.setAlignmentX(0f);
             bottom.add(c);
             bottom.add(javax.swing.Box.createVerticalStrut(6));
@@ -114,7 +121,8 @@ public final class ClipKeyApp {
         send.addActionListener(e -> submit());
         cancel.addActionListener(e -> cancelJob());
         frame.addWindowListener(new WindowAdapter() {
-            @Override public void windowActivated(WindowEvent e) { if (activeJob == null) readClipboard(); }
+            // 편집 중인 내용은 창을 오가도 덮어쓰지 않는다. 되돌리려면 '클립보드 다시 읽기'.
+            @Override public void windowActivated(WindowEvent e) { if (activeJob == null && !edited) readClipboard(); }
         });
 
         frame.setContentPane(root);
@@ -140,13 +148,26 @@ public final class ClipKeyApp {
     }
 
     private void setText(String t) {
-        text = t;
+        loading = true;
         preview.setText(t);
         preview.setCaretPosition(0);
+        loading = false;
+        edited = false;
+        updateText(t);
+    }
+
+    private void onEdit() {
+        if (loading) return;
+        edited = true;
+        updateText(ClipKeyText.normalize(preview.getText()));
+    }
+
+    private void updateText(String t) {
+        text = t;
         String problem = ClipKeyText.problem(t);
         boolean ok = problem == null;
         info.setForeground(ok ? UIManager.getColor("Label.foreground") : new Color(0xB00020));
-        info.setText(ok ? t.length() + "자, " + (t.split("\n", -1).length) + "줄" : problem);
+        info.setText((ok ? t.length() + "자, " + (t.split("\n", -1).length) + "줄" : problem) + (edited ? "  (편집됨)" : ""));
         send.setEnabled(ok && activeJob == null);
     }
 
@@ -160,14 +181,14 @@ public final class ClipKeyApp {
         Settings.save(Settings.url(), Settings.token(), delayMs, appendEnter, autoStart);
         setBusy(true);
         progress.setValue(0);
-        progress.setString("등록 중…");
+        status.setText("등록 중…");
         run(() -> client.submit(text, appendEnter, autoStart, delayMs), job -> {
             activeJob = job.requestId();
             showJob(job);
             poller.start();
         }, err -> {
             setBusy(false);
-            progress.setString("");
+            status.setText("");
             info.setText("전송 실패: " + err);
         });
     }
@@ -184,7 +205,7 @@ public final class ClipKeyApp {
             if (!job.active()) finishJob();
         }, err -> {
             polling = false;
-            progress.setString("상태 확인 실패: " + err);
+            status.setText("상태 확인 실패: " + err);
             if (err.contains("HTTP 404")) finishJob();  // 보드 재부팅 등으로 작업이 사라짐. 결과는 알 수 없음
         });
     }
@@ -193,13 +214,13 @@ public final class ClipKeyApp {
         ClipKeyClient client = client();
         if (client == null || activeJob == null) return;
         String id = activeJob;
-        run(() -> client.cancel(id), this::showJob, err -> progress.setString("취소 실패: " + err));
+        run(() -> client.cancel(id), this::showJob, err -> status.setText("취소 실패: " + err));
     }
 
     private void showJob(ClipKeyClient.Job job) {
         progress.setMaximum(Math.max(1, job.total()));
         progress.setValue(job.typed());
-        progress.setString(switch (job.state()) {
+        status.setText(switch (job.state()) {
             case "WAITING" -> auto.isSelected() ? "2초 뒤 자동 입력 — 멈추려면 취소 또는 보드 BOOT"
                                                 : "보드의 BOOT 버튼을 누르면 입력을 시작합니다 (60초 내)";
             case "TYPING" -> "입력 중 " + job.typed() + " / " + job.total();
@@ -221,6 +242,7 @@ public final class ClipKeyApp {
         send.setEnabled(!busy && ClipKeyText.problem(text) == null);
         cancel.setEnabled(busy);
         reload.setEnabled(!busy);
+        preview.setEditable(!busy);
         enter.setEnabled(!busy);
         auto.setEnabled(!busy);
         delay.setEnabled(!busy);

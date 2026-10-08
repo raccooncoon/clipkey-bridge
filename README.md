@@ -41,7 +41,7 @@ ESP32-S3 Super Mini 1개, USB 데이터 케이블, 송신 PC와 보드를 연결
 
 JDK 17 이상. 외부 Java 라이브러리는 없다. 소스는 `sender/java/src/clipkey/`, 한 바이너리가 두 모드로 동작한다.
 
-- **창 모드** (인자 없음): 클립보드 미리보기, 검증 결과, 마지막 Enter·자동 입력·글자 간격 옵션, 보내기, 진행률(typed/total), 취소. 설정 창에서 장치 주소와 토큰을 저장한다(macOS 사용자 설정, Git 밖).
+- **창 모드** (인자 없음): 클립보드 미리보기(편집 가능, 수정 시 재검증), 검증 결과, 마지막 Enter·자동 입력·글자 간격 옵션, 보내기, 진행률(typed/total), 취소. 설정 창에서 장치 주소와 토큰을 저장한다(macOS 사용자 설정, Git 밖).
 - **CLI 모드** (인자 있음): `--text TEXT` `--send` `--enter` `--auto` `--delay-ms 10..100`. 주소/토큰은 `CLIPKEY_URL`/`CLIPKEY_TOKEN` 환경변수, 없으면 창 모드에서 저장한 설정값.
 
 ### macOS
