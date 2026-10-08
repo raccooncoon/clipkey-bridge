@@ -28,7 +28,7 @@ public final class ClipKeySender {
                 case "--enter" -> enter = true;
                 case "--auto" -> auto = true;
                 case "--ime" -> {
-                    if (++i >= args.length) throw new IllegalArgumentException("--ime 값 필요 (lang1|ralt)");
+                    if (++i >= args.length) throw new IllegalArgumentException("--ime 값 필요 (lang1|ralt|capslock|ctrlspace)");
                     ime = args[i];
                 }
                 case "--text" -> {
@@ -40,7 +40,7 @@ public final class ClipKeySender {
                     delay = Integer.parseInt(args[i]);
                 }
                 case "--help" -> {
-                    System.out.println("ClipKeySender [--text TEXT] [--send] [--enter] [--auto] [--delay-ms 10..100] [--ime lang1|ralt]");
+                    System.out.println("ClipKeySender [--text TEXT] [--send] [--enter] [--auto] [--delay-ms 10..100] [--ime lang1|ralt|capslock|ctrlspace]");
                     return;
                 }
                 default -> throw new IllegalArgumentException("알 수 없는 옵션: " + args[i]);

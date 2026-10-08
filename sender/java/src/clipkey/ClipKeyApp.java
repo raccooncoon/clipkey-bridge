@@ -49,7 +49,7 @@ public final class ClipKeyApp {
     private final JCheckBox enter = new JCheckBox("마지막 Enter 추가", Settings.appendEnter());
     private final JCheckBox auto = new JCheckBox("버튼 없이 2초 후 자동 입력", Settings.autoStart());
     private final JSpinner delay = new JSpinner(new SpinnerNumberModel(Settings.delayMs(), 10, 100, 10));
-    private final JComboBox<String> ime = new JComboBox<>(new String[]{"lang1", "ralt"});
+    private final JComboBox<String> ime = new JComboBox<>(new String[]{"lang1", "ralt", "capslock", "ctrlspace"});
     private final JProgressBar progress = new JProgressBar(0, 1);
     private final JLabel status = new JLabel(" ");  // 진행 상태 문구. 바 위에 그리면 겹쳐 보여 따로 둔다
     private final JButton reload = new JButton("클립보드 다시 읽기");
@@ -100,7 +100,7 @@ public final class ClipKeyApp {
         options.add(new JLabel("글자 간격(ms)"));
         options.add(delay);
         ime.setSelectedItem(Settings.imeToggle());
-        ime.setToolTipText("한글 입력 시 한/영 전환 키. lang1 = 한/영 키, ralt = 오른쪽 Alt (101키 Type3 배열)");
+        ime.setToolTipText("한글 입력 시 한/영 전환 키. lang1 = Windows 한/영, ralt = Windows 오른쪽 Alt, capslock = Mac Caps Lock, ctrlspace = Mac ⌃Space");
         options.add(new JLabel("한/영 키"));
         options.add(ime);
 

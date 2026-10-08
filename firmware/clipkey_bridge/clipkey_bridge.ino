@@ -32,7 +32,7 @@
 
 namespace {
 
-constexpr char FIRMWARE_VERSION[] = "0.1.0-m5.0";
+constexpr char FIRMWARE_VERSION[] = "0.1.0-m5.1";
 constexpr char HOSTNAME[] = "clipkey";
 constexpr uint16_t HTTP_PORT = 80;
 constexpr char API_PREFIX[] = "/api/v1/";
@@ -53,10 +53,12 @@ constexpr uint32_t JOB_RETENTION_MS = 600000;    // 최근 요청 보관 (중복
 constexpr size_t JOB_HISTORY_SIZE = 16;
 constexpr int DEFAULT_DELAY_MS = 20, MIN_DELAY_MS = 10, MAX_DELAY_MS = 100;
 constexpr uint8_t HID_LANG1 = 0x90;       // 한/영 키 (Keyboard LANG1). Windows 는 VK_HANGUL 로 받는다
-constexpr uint8_t HID_RIGHT_ALT = 0xE6;   // 101키 Type3 배열에서 한/영 역할
+constexpr uint8_t HID_RIGHT_ALT = 0xE6;   // Windows 101키 Type3 배열에서 한/영 역할
+constexpr uint8_t HID_CAPS_LOCK = 0x39;   // macOS: 짧게 누르면 ABC↔한글 (기본 설정)
 
-// 한/영 전환에 쓸 키. 대상 PC 의 키보드 배열 설정에 따라 다르다.
-enum class ImeToggle : uint8_t { LANG1, RALT };
+// 한/영 전환에 쓸 키. 대상 PC OS 와 키보드 설정에 따라 다르다.
+//   lang1: Windows 한/영 키   ralt: Windows 오른쪽 Alt   capslock: macOS Caps Lock   ctrlspace: macOS ⌃Space(이전 입력 소스)
+enum class ImeToggle : uint8_t { LANG1, RALT, CAPSLOCK, CTRLSPACE };
 
 enum class JobState : uint8_t { WAITING, TYPING, COMPLETED, CANCELLED, FAILED };
 
@@ -99,7 +101,7 @@ struct Job {
   String pendingKeys;    // 현재 글자를 치기 위해 남은 키들 (한글 음절은 2~4키)
   size_t pendingIndex = 0;
   bool koreanMode = false;  // 대상 PC IME 를 한글로 바꿔 둔 상태인가. 시작은 영문으로 가정
-  uint32_t createdAt = 0, lastKeyAt = 0;
+  uint32_t createdAt = 0, lastKeyAt = 0, nextKeyAt = 0;
   bool active() const { return isActive(state); }
 };
 
@@ -239,12 +241,32 @@ void syncRecord(const char* error = nullptr) {
 // ---------- 작업 상태 전이 ----------
 
 // 한/영 전환 키를 한 번 누른다 (press/release). 대상 PC 의 IME 상태를 읽을 수는 없으므로 우리가 추적한 상태만 뒤집는다.
+// macOS 는 외부 키보드의 Caps Lock 을 아주 짧게 누르면 무시한다(실측: 5ms 는 첫 번째만 인식). 전환 키는 충분히 누른다.
+constexpr uint32_t TOGGLE_HOLD_MS = 80;
+// 전환 직후 OS 가 입력 소스를 바꾸는 동안 들어간 키는 이전 모드로 찍힌다(실측: Caps Lock 은 첫 글자 대문자, ⌃Space 는 첫 키 유실). 잠시 기다린다.
+constexpr uint32_t TOGGLE_SETTLE_MS = 200;
+
+void tapRaw(uint8_t usage) {
+  keyboard.pressRaw(usage);
+  delay(TOGGLE_HOLD_MS);
+  keyboard.releaseRaw(usage);
+}
+
 void tapImeToggle() {
-  const uint8_t k = job.imeToggle == ImeToggle::RALT ? HID_RIGHT_ALT : HID_LANG1;
-  keyboard.pressRaw(k);
-  delay(5);
-  keyboard.releaseRaw(k);
+  switch (job.imeToggle) {
+    case ImeToggle::LANG1: tapRaw(HID_LANG1); break;
+    case ImeToggle::RALT: tapRaw(HID_RIGHT_ALT); break;
+    case ImeToggle::CAPSLOCK: tapRaw(HID_CAPS_LOCK); break;
+    case ImeToggle::CTRLSPACE:
+      keyboard.press(KEY_LEFT_CTRL);
+      delay(20);
+      keyboard.press(' ');
+      delay(TOGGLE_HOLD_MS);
+      keyboard.releaseAll();
+      break;
+  }
   job.koreanMode = !job.koreanMode;
+  job.nextKeyAt = millis() + TOGGLE_SETTLE_MS;
 }
 
 void finishJob(JobState state, const char* error = nullptr) {
@@ -291,6 +313,7 @@ bool loadNextChar() {
 void typeNextChar() {
   const uint32_t now = millis();
   if (job.lastKeyAt != 0 && now - job.lastKeyAt < (uint32_t)job.delayMs) return;
+  if ((int32_t)(now - job.nextKeyAt) < 0) return;
   job.lastKeyAt = now;
   if (job.pendingIndex >= job.pendingKeys.length() && !loadNextChar()) return;
   keyboard.write(static_cast<uint8_t>(job.pendingKeys[job.pendingIndex++]));
@@ -397,6 +420,8 @@ size_t countTypable(const String& s) {
 bool parseToggle(const String& v, ImeToggle& out) {
   if (v.isEmpty() || v == "lang1") { out = ImeToggle::LANG1; return true; }
   if (v == "ralt") { out = ImeToggle::RALT; return true; }
+  if (v == "capslock") { out = ImeToggle::CAPSLOCK; return true; }
+  if (v == "ctrlspace") { out = ImeToggle::CTRLSPACE; return true; }
   return false;
 }
 

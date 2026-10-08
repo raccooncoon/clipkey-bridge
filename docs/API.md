@@ -13,7 +13,7 @@
 - 본문: UTF-8 텍스트 1~4,096바이트. 허용 문자는 ASCII 0x20~0x7E, LF, Tab, 한글 음절(U+AC00~D7A3)과 호환 자모(U+3131~3163). `typedCharacters`/`totalCharacters` 는 글자(코드포인트) 수
 - `appendEnter`: true/false, 생략 시 false
 - `autoStart`: true/false, 생략 시 false. true 면 버튼 없이 2초 뒤 자동 입력하며 그 2초 동안 버튼은 취소다. 보드 `secrets.h` 의 `CLIPKEY_ALLOW_AUTO_START` 가 true 여야 하고 아니면 400 `auto_start_disabled`.
-- `imeToggle`: `lang1`(기본, 한/영 키) 또는 `ralt`(오른쪽 Alt). 한글이 있을 때 대상 PC 의 IME 를 전환하는 키. 한글 구간 앞에서 한 번, 영문·기호 앞에서 다시, 작업이 끝나면 영문으로 복귀한다. 공백·줄바꿈·Tab 은 전환하지 않는다. 대상 PC 는 **영문 입력 상태**여야 한다(보드는 IME 상태를 읽을 수 없음).
+- `imeToggle`: `lang1`(기본, Windows 한/영 키), `ralt`(Windows 오른쪽 Alt), `capslock`(macOS Caps Lock 짧게), `ctrlspace`(macOS ⌃Space 이전 입력 소스). 한글이 있을 때 대상 PC 의 IME 를 전환하는 키. 한글 구간 앞에서 한 번, 영문·기호 앞에서 다시, 작업이 끝나면 영문으로 복귀한다. 공백·줄바꿈·Tab 은 전환하지 않는다. 대상 PC 는 **영문 입력 상태**여야 한다(보드는 IME 상태를 읽을 수 없음).
 - `delayMs`: 10~100 정수, 생략 시 20. 한글 음절은 자모 키 2~4개를 이 간격으로 친다. 키 press/release 후 다음 문자까지의 추가 간격이며 정확한 초당 문자 수를 보장하지 않는다.
 - CR은 받지 않는다. 송신기에서 LF로 정규화한다.
 

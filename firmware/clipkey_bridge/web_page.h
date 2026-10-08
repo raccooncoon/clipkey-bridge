@@ -36,7 +36,7 @@ progress{width:100%;height:10px;margin-top:10px}
     <label><input type="checkbox" id="enter"> 마지막 Enter</label>
     <label><input type="checkbox" id="auto"> 버튼 없이 2초 후 입력</label>
     <label>간격 <input type="number" id="delay" min="10" max="100" step="10" value="20">ms</label>
-    <label>한/영 키 <select id="ime"><option value="lang1">한/영</option><option value="ralt">오른쪽 Alt</option></select></label>
+    <label>한/영 키 <select id="ime"><option value="lang1">Windows 한/영</option><option value="ralt">Windows 오른쪽 Alt</option><option value="capslock">Mac Caps Lock</option><option value="ctrlspace">Mac ⌃Space</option></select></label>
   </div>
   <div class="row">
     <button id="paste">붙여넣기</button>
