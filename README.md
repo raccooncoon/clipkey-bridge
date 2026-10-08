@@ -18,7 +18,7 @@ USB 키보드 동작은 ESP32-S3 공식 USB API 지원 범위에 해당한다. �
 
 ## v0.1 목표
 
-- 영문 대소문자, 숫자, ASCII 특수문자, Space, LF(Enter), Tab, **한글**(2벌식 자모 키 + 한/영 전환, Windows 우선)
+- 영문 대소문자, 숫자, ASCII 특수문자, Space, LF(Enter), Tab, **한글**(2벌식 자모 키 + 한/영 전환: Windows 한/영·오른쪽 Alt, macOS Caps Lock·⌃Space)
 - US 키보드 배열 기준. 대상 PC는 영문 입력 상태, Caps Lock OFF
 - 최대 4,096바이트(한글 3바이트), CRLF/CR은 LF로 정규화, NFC 정규화, 그 외 Unicode(이모지·한자 등)는 거절
 - 전송 전 미리보기, 자동 마지막 Enter는 기본 OFF
