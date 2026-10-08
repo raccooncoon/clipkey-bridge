@@ -12,12 +12,14 @@ public final class Settings {
     public static String token() { return PREFS.get("token", ""); }
     public static int delayMs() { return PREFS.getInt("delayMs", 20); }
     public static boolean appendEnter() { return PREFS.getBoolean("appendEnter", false); }
+    public static boolean autoStart() { return PREFS.getBoolean("autoStart", false); }
 
-    public static void save(String url, String token, int delayMs, boolean appendEnter) {
+    public static void save(String url, String token, int delayMs, boolean appendEnter, boolean autoStart) {
         PREFS.put("url", url.trim());
         PREFS.put("token", token.trim());
         PREFS.putInt("delayMs", delayMs);
         PREFS.putBoolean("appendEnter", appendEnter);
+        PREFS.putBoolean("autoStart", autoStart);
     }
 
     public static boolean configured() {

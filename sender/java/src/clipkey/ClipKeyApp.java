@@ -44,6 +44,7 @@ public final class ClipKeyApp {
     private final JLabel info = new JLabel(" ");
     private final JLabel device = new JLabel(" ");
     private final JCheckBox enter = new JCheckBox("마지막 Enter 추가", Settings.appendEnter());
+    private final JCheckBox auto = new JCheckBox("버튼 없이 2초 후 자동 입력", Settings.autoStart());
     private final JSpinner delay = new JSpinner(new SpinnerNumberModel(Settings.delayMs(), 10, 100, 10));
     private final JProgressBar progress = new JProgressBar(0, 1);
     private final JButton reload = new JButton("클립보드 다시 읽기");
@@ -86,6 +87,7 @@ public final class ClipKeyApp {
 
         JPanel options = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         options.add(enter);
+        options.add(auto);
         options.add(new JLabel("글자 간격(ms)"));
         options.add(delay);
 
@@ -153,13 +155,13 @@ public final class ClipKeyApp {
     private void submit() {
         ClipKeyClient client = client();
         if (client == null) return;
-        boolean appendEnter = enter.isSelected();
+        boolean appendEnter = enter.isSelected(), autoStart = auto.isSelected();
         int delayMs = (Integer) delay.getValue();
-        Settings.save(Settings.url(), Settings.token(), delayMs, appendEnter);
+        Settings.save(Settings.url(), Settings.token(), delayMs, appendEnter, autoStart);
         setBusy(true);
         progress.setValue(0);
         progress.setString("등록 중…");
-        run(() -> client.submit(text, appendEnter, delayMs), job -> {
+        run(() -> client.submit(text, appendEnter, autoStart, delayMs), job -> {
             activeJob = job.requestId();
             showJob(job);
             poller.start();
@@ -198,7 +200,8 @@ public final class ClipKeyApp {
         progress.setMaximum(Math.max(1, job.total()));
         progress.setValue(job.typed());
         progress.setString(switch (job.state()) {
-            case "WAITING" -> "보드의 BOOT 버튼을 누르면 입력을 시작합니다 (60초 내)";
+            case "WAITING" -> auto.isSelected() ? "2초 뒤 자동 입력 — 멈추려면 취소 또는 보드 BOOT"
+                                                : "보드의 BOOT 버튼을 누르면 입력을 시작합니다 (60초 내)";
             case "TYPING" -> "입력 중 " + job.typed() + " / " + job.total();
             case "COMPLETED" -> "완료 " + job.typed() + " / " + job.total();
             case "CANCELLED" -> "취소됨 (" + job.error() + ") " + job.typed() + " / " + job.total();
@@ -219,6 +222,7 @@ public final class ClipKeyApp {
         cancel.setEnabled(busy);
         reload.setEnabled(!busy);
         enter.setEnabled(!busy);
+        auto.setEnabled(!busy);
         delay.setEnabled(!busy);
     }
 
@@ -264,7 +268,8 @@ public final class ClipKeyApp {
         save.addActionListener(e -> {
             try {
                 ClipKeyClient.parseBase(url.getText());
-                Settings.save(url.getText(), new String(token.getPassword()), (Integer) delay.getValue(), enter.isSelected());
+                Settings.save(url.getText(), new String(token.getPassword()), (Integer) delay.getValue(),
+                        enter.isSelected(), auto.isSelected());
                 dialog.dispose();
                 refreshDevice();
             } catch (IllegalArgumentException ex) {

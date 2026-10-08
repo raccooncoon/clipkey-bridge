@@ -4,12 +4,13 @@
 
 ## 작업 등록
 
-`POST /api/v1/type?appendEnter=false&delayMs=20`
+`POST /api/v1/type?appendEnter=false&delayMs=20&autoStart=false`
 
 - `Content-Type: text/plain; charset=utf-8`
 - `X-Request-Id`: UUID, 동일 요청의 중복 입력 방지
 - 본문: 검증된 ASCII 텍스트, 1~4,096바이트
 - `appendEnter`: true/false, 생략 시 false
+- `autoStart`: true/false, 생략 시 false. true 면 버튼 없이 2초 뒤 자동 입력하며 그 2초 동안 버튼은 취소다. 보드 `secrets.h` 의 `CLIPKEY_ALLOW_AUTO_START` 가 true 여야 하고 아니면 400 `auto_start_disabled`.
 - `delayMs`: 10~100 정수, 생략 시 20. 키 press/release 후 다음 문자까지의 추가 간격이며 정확한 초당 문자 수를 보장하지 않는다.
 - CR은 받지 않는다. 송신기에서 LF로 정규화한다.
 
@@ -19,7 +20,7 @@
 {"requestId":"uuid","state":"WAITING","expiresInSeconds":60}
 ```
 
-60초 안에 물리 버튼을 누르면 타이핑 시작. 마지막 Enter 옵션은 본문에 이미 있는 LF와 별개로 추가 Enter 하나를 의미한다.
+60초 안에 물리 버튼을 누르면 타이핑 시작(`autoStart=true` 면 2초 뒤 자동 시작). 마지막 Enter 옵션은 본문에 이미 있는 LF와 별개로 추가 Enter 하나를 의미한다.
 
 ## 상태와 취소
 
@@ -38,7 +39,7 @@
 
 | 응답 | 의미 |
 |---|---|
-| 400 | `invalid_request_id`, `empty_body`, `unsupported_character`, `invalid_option` |
+| 400 | `invalid_request_id`, `empty_body`, `unsupported_character`, `invalid_option`, `auto_start_disabled` |
 | 401 | `unauthorized` |
 | 404 | `not_found` — 작업이 없거나 상태 보관 기간 만료 |
 | 409 | `busy` — 다른 작업 실행/대기 중, `request_id_reused` — 동일 ID에 다른 내용 |
