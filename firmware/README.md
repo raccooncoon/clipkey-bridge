@@ -2,6 +2,10 @@
 
 첫 구현은 공식 Arduino-ESP32 USB HID 예제를 바탕으로 한다.
 
+## 웹 송신 페이지 (`web_page.h`, M4.5)
+
+`GET /` 가 단일 HTML/JS 페이지를 돌려준다(PROGMEM). 토큰은 브라우저 localStorage 에만 저장하고, 모든 동작은 `/api/v1` 을 Bearer 토큰으로 호출한다. http 페이지라 `crypto.randomUUID` 가 없어 `getRandomValues` 로 UUID 를 만든다. 페이지를 고치면 재업로드.
+
 ## LED 표시 (`clipkey_bridge/`, M4.3)
 
 보드 실측(2026-10-08): 빨간 LED 는 전원 표시, 작은 파란 LED 는 GPIO13(LOW 켜짐), 큰 LED 는 GPIO48 WS2812 RGB. 이 RGB LED 는 R/G 채널 순서가 라이브러리 기본과 반대라 `setRgb()` 에서 바꿔 보낸다. 핀을 모르는 보드는 `firmware/led_finder` 를 올리고 파란 LED 가 깜빡일 때 BOOT 를 누르면 시리얼로 핀과 극성을 보고한다.

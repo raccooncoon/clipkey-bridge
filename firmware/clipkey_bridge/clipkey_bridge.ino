@@ -1,4 +1,4 @@
-// ClipKey Bridge — 작업 등록(POST /api/v1/type) → 버튼 승인 → USB HID 타이핑, 상태 조회/취소, LED 상태 표시
+// ClipKey Bridge — 작업 등록(POST /api/v1/type) → 버튼 승인 → USB HID 타이핑, 상태 조회/취소, LED 상태 표시, 웹 송신 페이지(GET /)
 //
 // 빌드 조건 (Arduino-ESP32 3.x)
 //   - Board: ESP32S3 Dev Module
@@ -23,6 +23,7 @@
 #include "USB.h"
 #include "USBHIDKeyboard.h"
 #include "secrets.h"
+#include "web_page.h"
 
 #ifndef CLIPKEY_ALLOW_AUTO_START
 #define CLIPKEY_ALLOW_AUTO_START false
@@ -30,7 +31,7 @@
 
 namespace {
 
-constexpr char FIRMWARE_VERSION[] = "0.1.0-m4.4";
+constexpr char FIRMWARE_VERSION[] = "0.1.0-m4.5";
 constexpr char HOSTNAME[] = "clipkey";
 constexpr uint16_t HTTP_PORT = 80;
 constexpr char API_PREFIX[] = "/api/v1/";
@@ -314,6 +315,18 @@ String jobJson(const JobRecord& r, bool withExpiry = false) {
 
 // ---------- 요청 검증 ----------
 
+// X-Request-Id 가 없을 때 보드가 만든다 (iOS 단축어처럼 UUID 를 못 만드는 클라이언트용). 중복 방지는 ID 를 보낸 쪽만 받는다.
+String randomUuid() {
+  uint8_t b[16];
+  esp_fill_random(b, sizeof b);
+  b[6] = (b[6] & 0x0F) | 0x40;
+  b[8] = (b[8] & 0x3F) | 0x80;
+  char out[37];
+  snprintf(out, sizeof out, "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+           b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]);
+  return String(out);
+}
+
 bool isUuid(const String& s) {
   if (s.length() != 36) return false;
   for (size_t i = 0; i < 36; ++i) {
@@ -358,7 +371,8 @@ void handleStatus() {
 
 void handleType() {
   if (!requireAuth()) return;
-  const String id = server.header("X-Request-Id");
+  String id = server.header("X-Request-Id");
+  if (id.isEmpty()) id = randomUuid();
   const String text = server.arg("plain");
   bool appendEnter = false, autoStart = false;
   int delayMs = DEFAULT_DELAY_MS;
@@ -412,6 +426,11 @@ void handleCancel() {
   sendJson(200, jobJson(*r));
 }
 
+void handleIndex() {
+  server.sendHeader("Cache-Control", "no-cache");
+  server.send_P(200, "text/html; charset=utf-8", INDEX_HTML);
+}
+
 void handleNotFound() {
   if (server.uri().startsWith(API_PREFIX) && !requireAuth()) return;
   sendError(404, "not_found");
@@ -436,6 +455,8 @@ void setupWifi() {
 void setupHttp() {
   static const char* collected[] = {"Authorization", "X-Request-Id"};
   server.collectHeaders(collected, 2);
+  server.on("/", HTTP_GET, handleIndex);
+  server.on("/index.html", HTTP_GET, handleIndex);
   server.on("/api/v1/status", HTTP_GET, handleStatus);
   server.on("/api/v1/type", HTTP_POST, handleType);
   server.on(UriBraces("/api/v1/jobs/{}"), HTTP_GET, handleJob);
