@@ -28,7 +28,9 @@
 
 `POST /api/v1/jobs/{requestId}/cancel`: 작업 취소, 키 해제. 이미 입력된 문자를 되돌리지는 않는다.
 
-`GET /api/v1/status`: `firmwareVersion`, `usbReady`, `state`, `activeRequestId` 반환. 원문/토큰은 반환하지 않는다.
+`GET /api/v1/status`: `firmwareVersion`, `usbReady`, `state`, `activeRequestId` 반환. 작업이 없으면 `state`는 `IDLE`, `activeRequestId`는 `null`. 원문/토큰은 반환하지 않는다.
+
+`/api/v1/` 아래 존재하지 않는 경로도 인증을 먼저 검사한다. 토큰이 없거나 틀리면 404 대신 401을 반환한다.
 
 ## 실패와 중복
 

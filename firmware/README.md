@@ -2,7 +2,27 @@
 
 첫 구현은 공식 Arduino-ESP32 USB HID 예제를 바탕으로 한다.
 
-## M1: 버튼 → `Hello World!` (`clipkey_hello/`)
+## M2: 무선 작업 수신 (`clipkey_bridge/`) — 진행 중
+
+M1 검증 후 본 펌웨어는 `clipkey_bridge/`에서 이어 간다. `clipkey_hello/`는 M1 산출물로 유지한다.
+
+### M2.1 Wi-Fi 접속 + `/api/v1/status` + 토큰 인증
+
+- `secrets.h.example`을 `secrets.h`로 복사해 SSID/비밀번호/토큰을 넣는다. `secrets.h`는 커밋되지 않는다.
+- 개발 빌드는 **USB CDC On Boot = Enabled**. HID 키보드 + 시리얼 복합 장치로 동작해 IP를 시리얼로 확인할 수 있고, 재업로드 시 BOOT+RESET이 필요 없다.
+- `/api/v1/` 아래는 모든 경로에서 `Authorization: Bearer <token>`을 먼저 검사한다. 토큰이 틀리면 경로 존재 여부와 무관하게 401.
+- 이 단계는 작업 등록·타이핑을 하지 않는다. 버튼도 아직 사용하지 않는다.
+
+```bash
+cp firmware/clipkey_bridge/secrets.h.example firmware/clipkey_bridge/secrets.h   # 값 채우기
+arduino-cli compile --fqbn esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=cdc firmware/clipkey_bridge
+arduino-cli upload  --fqbn esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=cdc --port /dev/cu.usbmodem1101 firmware/clipkey_bridge
+arduino-cli monitor -p /dev/cu.usbmodem1101 -c baudrate=115200           # [wifi] connected, ip=... 확인
+curl -i http://<ip>/api/v1/status -H "Authorization: Bearer <token>"      # 200 JSON
+curl -i http://<ip>/api/v1/status                                          # 401
+```
+
+## M1: 버튼 → `Hello World!` (`clipkey_hello/`) — 완료
 
 BOOT 버튼(GPIO0)을 누르면 USB HID 키보드로 `Hello World!`를 한 번 입력한다.
 
