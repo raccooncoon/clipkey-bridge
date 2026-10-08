@@ -50,7 +50,7 @@ java sender/java/ClipKeySender.java
 실제 전송 시 보드 주소와 펌웨어에 설정한 동일한 토큰이 필요하다.
 
 ```bash
-export CLIPKEY_URL='http://192.168.1.50'
+export CLIPKEY_URL='http://clipkey.local'   # mDNS. 안 되면 보드 IP
 export CLIPKEY_TOKEN='replace-with-device-token'
 java sender/java/ClipKeySender.java --send
 java sender/java/ClipKeySender.java --send --enter --delay-ms 30

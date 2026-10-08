@@ -1,4 +1,4 @@
-// ClipKey Bridge — M2.1: Wi-Fi STA 접속 + GET /api/v1/status + Bearer 토큰 인증
+// ClipKey Bridge — M2.1: Wi-Fi 다중 SSID 접속 + mDNS(clipkey.local) + GET /api/v1/status + Bearer 토큰 인증
 //
 // 빌드 조건 (Arduino-ESP32 3.x)
 //   - Board: ESP32S3 Dev Module
@@ -16,6 +16,8 @@
 
 #include <atomic>
 #include <WiFi.h>
+#include <WiFiMulti.h>
+#include <ESPmDNS.h>
 #include <WebServer.h>
 #include "USB.h"
 #include "USBHIDKeyboard.h"
@@ -27,10 +29,15 @@ constexpr char FIRMWARE_VERSION[] = "0.1.0-m2.1";
 constexpr char HOSTNAME[] = "clipkey";
 constexpr uint16_t HTTP_PORT = 80;
 constexpr char API_PREFIX[] = "/api/v1/";
+constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 8000;  // 한 번의 스캔+접속 시도 상한
+constexpr uint32_t WIFI_RETRY_INTERVAL_MS = 10000;  // 실패 후 다음 시도까지 간격
 
 USBHIDKeyboard keyboard;
 WebServer server(HTTP_PORT);
+WiFiMulti wifiMulti;
 std::atomic<bool> usbMounted{false};
+bool mdnsStarted = false;
+uint32_t lastWifiAttemptAt = 0;
 
 void onUsbEvent(void*, esp_event_base_t base, int32_t id, void*) {
   if (base != ARDUINO_USB_EVENTS) return;
@@ -49,10 +56,11 @@ void onUsbEvent(void*, esp_event_base_t base, int32_t id, void*) {
 void onWifiEvent(WiFiEvent_t event) {
   switch (event) {
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-      Serial.printf("[wifi] connected, ip=%s\n", WiFi.localIP().toString().c_str());
+      Serial.printf("[wifi] connected ssid=%s ip=%s host=%s.local\n",
+                    WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), HOSTNAME);
       break;
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-      Serial.println("[wifi] disconnected, retrying");
+      Serial.println("[wifi] disconnected");
       break;
     default:
       break;
@@ -109,9 +117,30 @@ void setupUsb() {
 void setupWifi() {
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(HOSTNAME);
-  WiFi.setAutoReconnect(true);
   WiFi.onEvent(onWifiEvent);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  for (const WifiNetwork& n : WIFI_NETWORKS) wifiMulti.addAP(n.ssid, n.password);
+}
+
+// 끊겨 있으면 일정 간격으로 저장된 SSID 를 스캔해 가장 신호가 좋은 곳에 붙는다. 스캔 중에는 HTTP 처리가 잠시 멈춘다.
+void maintainWifi() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  const uint32_t now = millis();
+  if (lastWifiAttemptAt != 0 && now - lastWifiAttemptAt < WIFI_RETRY_INTERVAL_MS) return;
+  lastWifiAttemptAt = now;
+  Serial.println("[wifi] scanning for known networks");
+  wifiMulti.run(WIFI_CONNECT_TIMEOUT_MS);
+}
+
+// 접속 후 한 번만 시작한다. 이후 IP 가 바뀌어도 mDNS 가 새 주소로 응답한다.
+void maintainMdns() {
+  if (mdnsStarted || WiFi.status() != WL_CONNECTED) return;
+  mdnsStarted = MDNS.begin(HOSTNAME);
+  if (!mdnsStarted) {
+    Serial.println("[mdns] start failed");
+    return;
+  }
+  MDNS.addService("http", "tcp", HTTP_PORT);
+  Serial.printf("[mdns] http://%s.local\n", HOSTNAME);
 }
 
 void setupHttp() {
@@ -133,6 +162,8 @@ void setup() {
 }
 
 void loop() {
+  maintainWifi();
+  maintainMdns();
   server.handleClient();
   delay(1);
 }
