@@ -49,6 +49,7 @@ public final class ClipKeyApp {
     private final JCheckBox auto = new JCheckBox("버튼 없이 2초 후 자동 입력", Settings.autoStart());
     private final JSpinner delay = new JSpinner(new SpinnerNumberModel(Settings.delayMs(), 10, 100, 10));
     private final JProgressBar progress = new JProgressBar(0, 1);
+    private final JLabel status = new JLabel(" ");  // 진행 상태 문구. 바 위에 그리면 겹쳐 보여 따로 둔다
     private final JButton reload = new JButton("클립보드 다시 읽기");
     private final JButton send = new JButton("보내기");
     private final JButton cancel = new JButton("취소");
@@ -83,8 +84,6 @@ public final class ClipKeyApp {
             @Override public void removeUpdate(DocumentEvent e) { onEdit(); }
             @Override public void changedUpdate(DocumentEvent e) { onEdit(); }
         });
-        progress.setStringPainted(true);
-        progress.setString("");
         cancel.setEnabled(false);
 
         JPanel top = new JPanel(new BorderLayout());
@@ -106,7 +105,7 @@ public final class ClipKeyApp {
 
         JPanel bottom = new JPanel();
         bottom.setLayout(new BoxLayout(bottom, BoxLayout.Y_AXIS));
-        for (var c : new java.awt.Component[]{info, options, progress, buttons}) {
+        for (var c : new java.awt.Component[]{info, options, progress, status, buttons}) {
             if (c instanceof JPanel p) p.setAlignmentX(0f);
             bottom.add(c);
             bottom.add(javax.swing.Box.createVerticalStrut(6));
@@ -182,14 +181,14 @@ public final class ClipKeyApp {
         Settings.save(Settings.url(), Settings.token(), delayMs, appendEnter, autoStart);
         setBusy(true);
         progress.setValue(0);
-        progress.setString("등록 중…");
+        status.setText("등록 중…");
         run(() -> client.submit(text, appendEnter, autoStart, delayMs), job -> {
             activeJob = job.requestId();
             showJob(job);
             poller.start();
         }, err -> {
             setBusy(false);
-            progress.setString("");
+            status.setText("");
             info.setText("전송 실패: " + err);
         });
     }
@@ -206,7 +205,7 @@ public final class ClipKeyApp {
             if (!job.active()) finishJob();
         }, err -> {
             polling = false;
-            progress.setString("상태 확인 실패: " + err);
+            status.setText("상태 확인 실패: " + err);
             if (err.contains("HTTP 404")) finishJob();  // 보드 재부팅 등으로 작업이 사라짐. 결과는 알 수 없음
         });
     }
@@ -215,13 +214,13 @@ public final class ClipKeyApp {
         ClipKeyClient client = client();
         if (client == null || activeJob == null) return;
         String id = activeJob;
-        run(() -> client.cancel(id), this::showJob, err -> progress.setString("취소 실패: " + err));
+        run(() -> client.cancel(id), this::showJob, err -> status.setText("취소 실패: " + err));
     }
 
     private void showJob(ClipKeyClient.Job job) {
         progress.setMaximum(Math.max(1, job.total()));
         progress.setValue(job.typed());
-        progress.setString(switch (job.state()) {
+        status.setText(switch (job.state()) {
             case "WAITING" -> auto.isSelected() ? "2초 뒤 자동 입력 — 멈추려면 취소 또는 보드 BOOT"
                                                 : "보드의 BOOT 버튼을 누르면 입력을 시작합니다 (60초 내)";
             case "TYPING" -> "입력 중 " + job.typed() + " / " + job.total();
