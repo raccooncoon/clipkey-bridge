@@ -24,6 +24,7 @@
 #include "USBHIDKeyboard.h"
 #include "secrets.h"
 #include "web_page.h"
+#include "hangul.h"
 
 #ifndef CLIPKEY_ALLOW_AUTO_START
 #define CLIPKEY_ALLOW_AUTO_START false
@@ -31,7 +32,7 @@
 
 namespace {
 
-constexpr char FIRMWARE_VERSION[] = "0.1.0-m4.5";
+constexpr char FIRMWARE_VERSION[] = "0.1.0-m5.0";
 constexpr char HOSTNAME[] = "clipkey";
 constexpr uint16_t HTTP_PORT = 80;
 constexpr char API_PREFIX[] = "/api/v1/";
@@ -51,6 +52,11 @@ constexpr uint32_t AUTO_START_DELAY_MS = 2000;   // autoStart 작업의 취소 �
 constexpr uint32_t JOB_RETENTION_MS = 600000;    // 최근 요청 보관 (중복 방지·상태 조회)
 constexpr size_t JOB_HISTORY_SIZE = 16;
 constexpr int DEFAULT_DELAY_MS = 20, MIN_DELAY_MS = 10, MAX_DELAY_MS = 100;
+constexpr uint8_t HID_LANG1 = 0x90;       // 한/영 키 (Keyboard LANG1). Windows 는 VK_HANGUL 로 받는다
+constexpr uint8_t HID_RIGHT_ALT = 0xE6;   // 101키 Type3 배열에서 한/영 역할
+
+// 한/영 전환에 쓸 키. 대상 PC 의 키보드 배열 설정에 따라 다르다.
+enum class ImeToggle : uint8_t { LANG1, RALT };
 
 enum class JobState : uint8_t { WAITING, TYPING, COMPLETED, CANCELLED, FAILED };
 
@@ -85,9 +91,14 @@ struct Job {
   bool appendEnter = false;
   bool autoStart = false;
   int delayMs = DEFAULT_DELAY_MS;
+  ImeToggle imeToggle = ImeToggle::LANG1;
   JobState state = JobState::COMPLETED;
-  size_t typed = 0;
-  size_t total = 0;
+  size_t typed = 0;      // 입력 끝난 글자(코드포인트) 수
+  size_t total = 0;      // 전체 글자 수 (+ 추가 Enter)
+  size_t pos = 0;        // text 의 바이트 오프셋
+  String pendingKeys;    // 현재 글자를 치기 위해 남은 키들 (한글 음절은 2~4키)
+  size_t pendingIndex = 0;
+  bool koreanMode = false;  // 대상 PC IME 를 한글로 바꿔 둔 상태인가. 시작은 영문으로 가정
   uint32_t createdAt = 0, lastKeyAt = 0;
   bool active() const { return isActive(state); }
 };
@@ -185,13 +196,14 @@ void maintainMdns() {
 
 // ---------- 작업 기록 ----------
 
-uint32_t fnv1a(const String& s, bool appendEnter, bool autoStart, int delayMs) {
+uint32_t fnv1a(const String& s, bool appendEnter, bool autoStart, int delayMs, ImeToggle toggle) {
   uint32_t h = 2166136261u;
   auto mix = [&](uint8_t b) { h = (h ^ b) * 16777619u; };
   for (size_t i = 0; i < s.length(); ++i) mix(s[i]);
   mix(appendEnter);
   mix(autoStart);
   mix(delayMs);
+  mix(static_cast<uint8_t>(toggle));
   return h;
 }
 
@@ -226,8 +238,18 @@ void syncRecord(const char* error = nullptr) {
 
 // ---------- 작업 상태 전이 ----------
 
+// 한/영 전환 키를 한 번 누른다 (press/release). 대상 PC 의 IME 상태를 읽을 수는 없으므로 우리가 추적한 상태만 뒤집는다.
+void tapImeToggle() {
+  const uint8_t k = job.imeToggle == ImeToggle::RALT ? HID_RIGHT_ALT : HID_LANG1;
+  keyboard.pressRaw(k);
+  delay(5);
+  keyboard.releaseRaw(k);
+  job.koreanMode = !job.koreanMode;
+}
+
 void finishJob(JobState state, const char* error = nullptr) {
   keyboard.releaseAll();
+  if (job.koreanMode) tapImeToggle();  // 시작 전 규칙(영문 상태)으로 되돌린다
   job.state = state;
   flashResult(state == JobState::COMPLETED ? GREEN : RED);
   syncRecord(error);
@@ -243,14 +265,37 @@ void startTyping() {
   Serial.println("[job] TYPING");
 }
 
-// 한 글자씩. delayMs 는 press/release 후 다음 글자까지의 추가 간격. 본문 뒤의 한 글자는 추가 Enter.
+// 한 틱에 키 하나. delayMs 는 press/release 후 다음 키까지의 간격. 본문 뒤의 한 글자는 추가 Enter.
+// 한글은 IME 한글 모드에서 자모 키를 순서대로 치고, 영문·기호 앞에서는 영문 모드로 되돌린다.
+// 공백·줄바꿈·Tab 은 어느 모드에서나 같으므로 전환하지 않는다.
+bool modeNeutral(uint32_t cp) { return cp == ' ' || cp == '\n' || cp == '\t'; }
+
+// 다음 글자를 꺼내 pendingKeys 를 채운다. 전환 키가 필요하면 그것만 먼저 보내고 false 를 돌려준다(한 틱 소비).
+bool loadNextChar() {
+  uint32_t cp;
+  if (job.pos < job.text.length()) {
+    size_t p = job.pos;
+    cp = hangul::decodeUtf8(job.text, p);
+    const bool korean = hangul::isHangul(cp);
+    if (korean != job.koreanMode && !modeNeutral(cp)) { tapImeToggle(); return false; }
+    job.pos = p;
+    job.pendingKeys = korean ? hangul::keys(cp) : String(static_cast<char>(cp));
+  } else {
+    if (job.koreanMode) { tapImeToggle(); return false; }
+    job.pendingKeys = "\n";  // 추가 Enter
+  }
+  job.pendingIndex = 0;
+  return true;
+}
+
 void typeNextChar() {
   const uint32_t now = millis();
   if (job.lastKeyAt != 0 && now - job.lastKeyAt < (uint32_t)job.delayMs) return;
-  const char c = job.typed < job.text.length() ? job.text[job.typed] : '\n';
-  keyboard.write(static_cast<uint8_t>(c));
-  job.typed++;
   job.lastKeyAt = now;
+  if (job.pendingIndex >= job.pendingKeys.length() && !loadNextChar()) return;
+  keyboard.write(static_cast<uint8_t>(job.pendingKeys[job.pendingIndex++]));
+  if (job.pendingIndex < job.pendingKeys.length()) return;
+  job.typed++;
   if (job.typed >= job.total) finishJob(JobState::COMPLETED);
 }
 
@@ -337,12 +382,22 @@ bool isUuid(const String& s) {
   return true;
 }
 
-bool isTypable(const String& s) {
-  for (size_t i = 0; i < s.length(); ++i) {
-    const char c = s[i];
-    if ((c < 0x20 || c > 0x7E) && c != '\n' && c != '\t') return false;
+// 허용: ASCII 0x20~0x7E, LF, Tab, 한글 음절·호환 자모. 글자(코드포인트) 수를 돌려주고 허용 밖이면 0.
+size_t countTypable(const String& s) {
+  size_t n = 0;
+  for (size_t i = 0; i < s.length();) {
+    const uint32_t cp = hangul::decodeUtf8(s, i);
+    const bool ascii = (cp >= 0x20 && cp <= 0x7E) || cp == '\n' || cp == '\t';
+    if (!ascii && !hangul::isHangul(cp)) return 0;
+    ++n;
   }
-  return true;
+  return n;
+}
+
+bool parseToggle(const String& v, ImeToggle& out) {
+  if (v.isEmpty() || v == "lang1") { out = ImeToggle::LANG1; return true; }
+  if (v == "ralt") { out = ImeToggle::RALT; return true; }
+  return false;
 }
 
 bool parseBool(const String& v, bool& out) {
@@ -376,17 +431,19 @@ void handleType() {
   const String text = server.arg("plain");
   bool appendEnter = false, autoStart = false;
   int delayMs = DEFAULT_DELAY_MS;
+  ImeToggle imeToggle = ImeToggle::LANG1;
   if (!isUuid(id)) return sendError(400, "invalid_request_id");
   if (!parseBool(server.arg("appendEnter"), appendEnter) || !parseBool(server.arg("autoStart"), autoStart)
-      || !parseDelay(server.arg("delayMs"), delayMs)) {
+      || !parseDelay(server.arg("delayMs"), delayMs) || !parseToggle(server.arg("imeToggle"), imeToggle)) {
     return sendError(400, "invalid_option");
   }
   if (autoStart && !CLIPKEY_ALLOW_AUTO_START) return sendError(400, "auto_start_disabled");
   if (text.length() > MAX_TEXT_BYTES) return sendError(413, "too_large");
   if (text.isEmpty()) return sendError(400, "empty_body");
-  if (!isTypable(text)) return sendError(400, "unsupported_character");
+  const size_t chars = countTypable(text);
+  if (chars == 0) return sendError(400, "unsupported_character");
 
-  const uint32_t hash = fnv1a(text, appendEnter, autoStart, delayMs);
+  const uint32_t hash = fnv1a(text, appendEnter, autoStart, delayMs, imeToggle);
   if (JobRecord* dup = findRecord(id)) {
     if (dup->hash != hash) return sendError(409, "request_id_reused");
     return sendJson(202, jobJson(*dup, dup->state == JobState::WAITING));  // 같은 요청 재전송: 다시 입력하지 않음
@@ -402,11 +459,12 @@ void handleType() {
   job.appendEnter = appendEnter;
   job.autoStart = autoStart;
   job.delayMs = delayMs;
-  job.total = text.length() + (appendEnter ? 1 : 0);
+  job.imeToggle = imeToggle;
+  job.total = chars + (appendEnter ? 1 : 0);
   job.state = JobState::WAITING;
   job.createdAt = millis();
   *rec = JobRecord{id, hash, JobState::WAITING, 0, job.total, nullptr, job.createdAt, true};
-  Serial.printf("[job] WAITING chars=%u enter=%d auto=%d delay=%d\n", (unsigned)job.total, appendEnter, autoStart, delayMs);
+  Serial.printf("[job] WAITING chars=%u bytes=%u enter=%d auto=%d delay=%d\n", (unsigned)job.total, (unsigned)text.length(), appendEnter, autoStart, delayMs);
   sendJson(202, jobJson(*rec, true));
 }
 

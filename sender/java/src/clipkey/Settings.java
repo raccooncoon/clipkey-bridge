@@ -13,13 +13,16 @@ public final class Settings {
     public static int delayMs() { return PREFS.getInt("delayMs", 20); }
     public static boolean appendEnter() { return PREFS.getBoolean("appendEnter", false); }
     public static boolean autoStart() { return PREFS.getBoolean("autoStart", false); }
+    /** 한/영 전환 키: lang1(한/영 키) 또는 ralt(오른쪽 Alt). 대상 PC 의 키보드 배열 설정에 따른다. */
+    public static String imeToggle() { return PREFS.get("imeToggle", "lang1"); }
 
-    public static void save(String url, String token, int delayMs, boolean appendEnter, boolean autoStart) {
+    public static void save(String url, String token, int delayMs, boolean appendEnter, boolean autoStart, String imeToggle) {
         PREFS.put("url", url.trim());
         PREFS.put("token", token.trim());
         PREFS.putInt("delayMs", delayMs);
         PREFS.putBoolean("appendEnter", appendEnter);
         PREFS.putBoolean("autoStart", autoStart);
+        PREFS.put("imeToggle", imeToggle);
     }
 
     public static boolean configured() {
