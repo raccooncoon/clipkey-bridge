@@ -8,9 +8,9 @@
 
 ## M1 — USB HID 첫 성공
 
-- [x] 칩, Flash/PSRAM 용량, Native USB 배선 확인 (ESP32-S3, 4MB/2MB, Native USB 직결) — BOOT/LED 핀은 실측 대기
+- [x] 칩, Flash/PSRAM 용량, Native USB 배선 확인 (ESP32-S3, 4MB/2MB, Native USB 직결) — BOOT=GPIO0 런타임 입력 동작 확인, LED 핀 미확인
 - [x] Arduino-ESP32 HID 펌웨어 빌드, 사용한 정확한 버전 기록 (esp32 3.3.2, 컴파일·업로드·키보드 인식 확인)
-- [ ] 키보드 인식 후 버튼을 누르면 Hello World 입력 — 펌웨어 작성(`firmware/clipkey_hello`), 실물 검증 대기
+- [x] 키보드 인식 후 버튼을 누르면 Hello World 입력 (`firmware/clipkey_hello`, 2026-10-08 실물 확인)
 - [ ] 대문자, 숫자, 모든 ASCII 기호와 반복 문자 검증
 
 완료 기준: 대상 PC의 텍스트 편집기에 한 번의 버튼 조작으로 정확하게 입력되고, 재부팅 시 자동 입력되지 않는다.
