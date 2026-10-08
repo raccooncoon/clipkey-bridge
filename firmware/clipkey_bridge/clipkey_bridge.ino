@@ -1,4 +1,4 @@
-// ClipKey Bridge — M2.2: 작업 등록(POST /api/v1/type) → 버튼 승인 → USB HID 타이핑, 상태 조회/취소
+// ClipKey Bridge — 작업 등록(POST /api/v1/type) → 버튼 승인 → USB HID 타이핑, 상태 조회/취소, LED 상태 표시
 //
 // 빌드 조건 (Arduino-ESP32 3.x)
 //   - Board: ESP32S3 Dev Module
@@ -26,7 +26,7 @@
 
 namespace {
 
-constexpr char FIRMWARE_VERSION[] = "0.1.0-m2.2";
+constexpr char FIRMWARE_VERSION[] = "0.1.0-m4.3";
 constexpr char HOSTNAME[] = "clipkey";
 constexpr uint16_t HTTP_PORT = 80;
 constexpr char API_PREFIX[] = "/api/v1/";
@@ -35,6 +35,10 @@ constexpr uint32_t WIFI_RETRY_INTERVAL_MS = 10000;
 
 constexpr uint8_t BUTTON_PIN = 0;  // BOOT. 런타임 입력 동작은 실물 확인됨
 constexpr uint32_t DEBOUNCE_MS = 30;
+constexpr uint8_t LED_PIN = 13;    // 작은 파란 LED, LOW 일 때 켜짐 (firmware/led_finder 로 실측)
+constexpr uint8_t RGB_PIN = 48;    // WS2812 RGB LED (실측)
+constexpr uint8_t RGB_LEVEL = 40;  // 0~255. 책상 위에서 눈부시지 않은 밝기
+constexpr uint32_t RESULT_FLASH_MS = 1500;
 
 constexpr size_t MAX_TEXT_BYTES = 4096;
 constexpr uint32_t WAIT_TIMEOUT_MS = 60000;      // 승인 대기 만료
@@ -96,6 +100,43 @@ uint32_t lastWifiAttemptAt = 0;
 Job job;
 JobRecord history[JOB_HISTORY_SIZE];
 Debounce button{true, true, 0};  // 부팅 직후를 '눌림'으로 가정: 떼어진 뒤의 누름만 에지
+
+struct Rgb { uint8_t r, g, b; bool operator==(const Rgb& o) const { return r == o.r && g == o.g && b == o.b; } };
+constexpr Rgb OFF{0, 0, 0}, RED{RGB_LEVEL, 0, 0}, GREEN{0, RGB_LEVEL, 0}, BLUE{0, 0, RGB_LEVEL}, DIM_GREEN{0, 4, 0};
+Rgb resultColor = OFF;
+uint32_t resultUntil = 0;
+
+// ---------- LED ----------
+
+// 색이 바뀔 때만 WS2812 에 쓴다. 매 루프마다 쓰면 RMT 전송 시간이 낭비된다.
+// 이 보드의 LED 는 R/G 순서가 라이브러리 기본과 반대라 바꿔 보낸다 (실측: 빨강이 초록으로 보임).
+void setRgb(Rgb c) {
+  static Rgb last{1, 1, 1};
+  if (c == last) return;
+  rgbLedWrite(RGB_PIN, c.g, c.r, c.b);
+  last = c;
+}
+
+void setLed(bool on) { digitalWrite(LED_PIN, on ? LOW : HIGH); }
+
+void flashResult(Rgb c) {
+  resultColor = c;
+  resultUntil = millis() + RESULT_FLASH_MS;
+}
+
+// 우선순위: 결과 플래시 > 작업 상태 > Wi-Fi 상태
+void maintainLed() {
+  const uint32_t now = millis();
+  const bool fast = (now / 300) % 2 == 0, slow = (now / 700) % 2 == 0;
+  if (now < resultUntil) { setRgb(resultColor); setLed(false); return; }
+  switch (job.state) {
+    case JobState::WAITING: setRgb(fast ? BLUE : OFF); setLed(fast); return;
+    case JobState::TYPING: setRgb(BLUE); setLed(true); return;
+    default: break;
+  }
+  setLed(false);
+  setRgb(WiFi.status() == WL_CONNECTED ? DIM_GREEN : (slow ? RED : OFF));
+}
 
 // ---------- USB / Wi-Fi / mDNS ----------
 
@@ -180,6 +221,7 @@ void syncRecord(const char* error = nullptr) {
 void finishJob(JobState state, const char* error = nullptr) {
   keyboard.releaseAll();
   job.state = state;
+  flashResult(state == JobState::COMPLETED ? GREEN : RED);
   syncRecord(error);
   job.text = String();  // 원문은 끝나는 즉시 버린다
   Serial.printf("[job] %s typed=%u/%u%s%s\n", name(state), (unsigned)job.typed, (unsigned)job.total,
@@ -394,6 +436,8 @@ void setupHttp() {
 void setup() {
   Serial.begin(115200);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(LED_PIN, OUTPUT);
+  setLed(false);
   setupUsb();
   setupWifi();
   setupHttp();
@@ -406,6 +450,7 @@ void loop() {
   server.handleClient();
   maintainButton();
   maintainJob();
+  maintainLed();
   delay(1);
 }
 

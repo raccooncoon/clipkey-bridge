@@ -2,7 +2,22 @@
 
 첫 구현은 공식 Arduino-ESP32 USB HID 예제를 바탕으로 한다.
 
-## M2: 무선 작업 수신 (`clipkey_bridge/`) — 진행 중
+## LED 표시 (`clipkey_bridge/`, M4.3)
+
+보드 실측(2026-10-08): 빨간 LED 는 전원 표시, 작은 파란 LED 는 GPIO13(LOW 켜짐), 큰 LED 는 GPIO48 WS2812 RGB. 이 RGB LED 는 R/G 채널 순서가 라이브러리 기본과 반대라 `setRgb()` 에서 바꿔 보낸다. 핀을 모르는 보드는 `firmware/led_finder` 를 올리고 파란 LED 가 깜빡일 때 BOOT 를 누르면 시리얼로 핀과 극성을 보고한다.
+
+| 상태 | RGB | 작은 파란 LED |
+|---|---|---|
+| Wi-Fi 미연결 | 빨강 느린 점멸 | 꺼짐 |
+| 대기(연결됨) | 초록 아주 어둡게 | 꺼짐 |
+| WAITING | 파랑 점멸 | 점멸 |
+| TYPING | 파랑 켜짐 | 켜짐 |
+| 완료 | 초록 1.5초 | 꺼짐 |
+| 취소/실패/만료 | 빨강 1.5초 | 꺼짐 |
+
+밝기는 `RGB_LEVEL`(기본 40/255), 대기 초록은 `DIM_GREEN`(4/255)으로 조정한다.
+
+## M2: 무선 작업 수신 (`clipkey_bridge/`) — 완료
 
 M1 검증 후 본 펌웨어는 `clipkey_bridge/`에서 이어 간다. `clipkey_hello/`는 M1 산출물로 유지한다.
 
@@ -13,7 +28,7 @@ M1 검증 후 본 펌웨어는 `clipkey_bridge/`에서 이어 간다. `clipkey_h
 - 완료·취소·만료·USB 끊김 모두 `releaseAll()` 로 끝난다. 원문은 작업이 끝나는 즉시 메모리에서 지운다.
 - 최근 16개 요청 ID 와 요청 해시를 10분 보관한다. 같은 요청 재전송은 기존 작업을 돌려주고(202), 같은 ID 에 다른 내용은 409.
 - 실측(2026-10-08, curl): 등록 202 / 조회 200 / 중복 202 / ID 재사용 409 / 실행 중 등록 409 / 취소 200 / UUID·빈 본문·한글·옵션 오류 400 / 4097B 413 / 4096B 202 / 미존재 404 / 60초 만료 CANCELLED(expired). 실제 타이핑(2026-10-08): 80자(대소문자·숫자·반복·Tab·LF·전 ASCII 기호·추가 Enter) TextEdit 에 정확히 입력, COMPLETED 80/80. 버튼 중단: 2,819자 작업을 TYPING 중 BOOT 로 중단 → CANCELLED(button), typed=701 이 화면 출력과 정확히 일치. 간격별 누락 검사: 4,095자@20ms, 2,549자@10ms, 329자@100ms 모두 화면과 바이트 일치.
-- 업로드는 `firmware/tools/upload.sh clipkey_bridge` 로 한다(컴파일 + 1200bps touch 폴백).
+- 업로드는 `firmware/tools/upload.sh clipkey_bridge` 로 한다. 앱(CDC) 포트면 1200bps touch 로 다운로드 모드에 넣고 ROM 포트(`usbmodem1101`)에 올린다. 플래시 후 리셋 단계의 포트 오류는 무시한다(모든 구간 검증이 성공 기준).
 
 ### M2.1 Wi-Fi 다중 SSID + mDNS + `/api/v1/status` + 토큰 인증
 
