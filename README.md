@@ -6,7 +6,7 @@
 
 - 저장소명: `clipkey-bridge`
 - 대상 보드: ESP32-S3 Super Mini — 실제 보드의 Native USB 연결 확인 필요
-- 송신기: Java 17 이상, 최초 CLI → 이후 데스크톱 UI
+- 송신기: Java 17 이상, Swing 창 + CLI (macOS 는 `.app` 번들)
 - 펌웨어: Arduino-ESP32 / TinyUSB 기반으로 개발 예정
 - 입력 대상: USB HID 키보드를 허용하는 PC, 별도 수신 프로그램 불필요
 
@@ -39,36 +39,29 @@ ESP32-S3 Super Mini 1개, USB 데이터 케이블, 송신 PC와 보드를 연결
 
 ## 송신기 실행
 
-JDK 17 이상 설치 후 저장소 루트에서 실행한다. 외부 Java 라이브러리는 필요 없다.
+JDK 17 이상. 외부 Java 라이브러리는 없다. 소스는 `sender/java/src/clipkey/`, 한 바이너리가 두 모드로 동작한다.
+
+- **창 모드** (인자 없음): 클립보드 미리보기, 검증 결과, 마지막 Enter·글자 간격 옵션, 보내기, 진행률(typed/total), 취소. 설정 창에서 장치 주소와 토큰을 저장한다(macOS 사용자 설정, Git 밖).
+- **CLI 모드** (인자 있음): `--text TEXT` `--send` `--enter` `--delay-ms 10..100`. 주소/토큰은 `CLIPKEY_URL`/`CLIPKEY_TOKEN` 환경변수, 없으면 창 모드에서 저장한 설정값.
+
+### macOS
+
+macOS 15+에서 `java` 명령으로 직접 실행하면 보드 연결이 `No route to host`로 실패한다(실측, JDK 7종 모두). JDK 런처가 로컬 네트워크 허용 알림을 띄우지 못해 조용히 거부되기 때문이다. 그래서 `.app` 번들로 실행한다.
 
 ```bash
-java sender/java/ClipKeySender.java --text 'Hello World!'
-java sender/java/ClipKeySender.java
+sh sender/macos/build-app.sh        # ~/Applications/ClipKeySender.app 생성 + jar 설치. 이후엔 jar 만 갱신
+open ~/Applications/ClipKeySender.app                                       # 창 모드
+~/Applications/ClipKeySender.app/Contents/MacOS/ClipKeySender --send        # CLI 모드
 ```
 
-첫 명령은 직접 지정한 텍스트, 두 번째는 클립보드를 읽는다. 기본은 미리보기만 한다.
-실제 전송 시 보드 주소와 펌웨어에 설정한 동일한 토큰이 필요하다.
+첫 실행 때 로컬 네트워크 허용 알림이 뜨면 허용한다. 놓쳤으면 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 `ClipKeySender`를 켠다. jar 는 번들 밖(`~/Library/Application Support/ClipKey`)에 두므로 소스를 고쳐 스크립트를 다시 실행해도 허용이 유지된다. `--rebuild` 로 번들을 다시 만들면 허용을 다시 받는다.
 
-```bash
-export CLIPKEY_URL='http://clipkey.local'   # mDNS. 안 되면 보드 IP
-export CLIPKEY_TOKEN='replace-with-device-token'
-java sender/java/ClipKeySender.java --send
-java sender/java/ClipKeySender.java --send --enter --delay-ms 30
-```
+미리보기만 할 때는 JDK 22+ 의 소스 실행으로도 된다: `java sender/java/src/clipkey/ClipKeySender.java`
 
-### macOS: `.app`으로 실행해야 한다
+### 전송 결과 해석
 
-macOS 15+에서 `java` 명령으로 직접 실행하면 보드 연결이 `No route to host`로 실패한다(실측, JDK 7종 모두). JDK 런처가 로컬 네트워크 허용 알림을 띄우지 못해 조용히 거부되기 때문이다. 미리보기(`--send` 없음)는 네트워크를 쓰지 않으므로 `java`로도 된다.
-
-```bash
-sh sender/macos/build-app.sh          # jpackage 로 ~/Applications/ClipKeySender.app 설치 (JDK 17+ 의 jpackage 사용)
-~/Applications/ClipKeySender.app/Contents/MacOS/ClipKeySender --send      # 첫 실행 때 허용 알림 → 허용
-```
-
-알림을 놓쳤으면 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 `ClipKeySender`를 켠다. 소스를 고치면 스크립트를 다시 실행한다.
-
-`202` 응답은 대기 작업 등록이며 입력 완료가 아니다. 보드 버튼 승인 후 시작한다.
-통신 실패 시 자동 재전송하지 않는다. 대상 PC에서 입력 상태를 확인한다.
+`202`는 대기 작업 등록이며 입력 완료가 아니다. 보드 버튼 승인 후 시작하고, 창 모드는 완료까지 진행률을 보여준다.
+통신 실패 시 자동 재전송하지 않는다. 같은 요청 ID 재전송은 보드가 재입력하지 않지만 CLI 재실행은 새 ID 이므로 대상 PC 를 먼저 확인한다.
 
 ## 문서
 
