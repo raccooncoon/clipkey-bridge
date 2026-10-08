@@ -1,4 +1,6 @@
-# v0.1 API 계약 — 구현 예정
+# v0.1 API 계약
+
+`GET /`: 브라우저용 송신 페이지(인증 없음, 정적 HTML). 페이지의 모든 동작은 아래 API 를 Bearer 토큰으로 호출한다.
 
 기본 주소는 `CLIPKEY_URL`. `/api/v1/` 아래 모든 요청에 `Authorization: Bearer <token>`을 요구한다.
 
@@ -7,7 +9,7 @@
 `POST /api/v1/type?appendEnter=false&delayMs=20&autoStart=false`
 
 - `Content-Type: text/plain; charset=utf-8`
-- `X-Request-Id`: UUID, 동일 요청의 중복 입력 방지
+- `X-Request-Id`: UUID, 동일 요청의 중복 입력 방지. 생략하면 보드가 생성한다(단축어 등 UUID 를 못 만드는 클라이언트용, 이 경우 중복 방지 없음)
 - 본문: 검증된 ASCII 텍스트, 1~4,096바이트
 - `appendEnter`: true/false, 생략 시 false
 - `autoStart`: true/false, 생략 시 false. true 면 버튼 없이 2초 뒤 자동 입력하며 그 2초 동안 버튼은 취소다. 보드 `secrets.h` 의 `CLIPKEY_ALLOW_AUTO_START` 가 true 여야 하고 아니면 400 `auto_start_disabled`.
