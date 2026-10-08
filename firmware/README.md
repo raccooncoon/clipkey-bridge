@@ -2,6 +2,10 @@
 
 첫 구현은 공식 Arduino-ESP32 USB HID 예제를 바탕으로 한다.
 
+## 한글 입력 (`hangul.h`, M5)
+
+음절(U+AC00~)을 `(cp-0xAC00)` 산술로 초·중·종성 인덱스로 나누고 2벌식 키 표로 바꾼다. 대문자는 Shift(ㄲ=R), 복모음·겹받침은 두 키(ㅘ=hk, ㄳ=rt). 호환 자모(ㅋㅋ)도 지원. 한글 앞에서 `imeToggle` 키(Lang1 0x90 또는 오른쪽 Alt 0xE6)를 한 번 눌러 IME 를 한글로 바꾸고, 영문·기호 앞에서 다시 누른다. 작업 종료(완료·취소·실패)에 한글 모드였으면 영문으로 되돌린다. 대상 PC 가 영문 상태라는 전제가 필요하다.
+
 ## 웹 송신 페이지 (`web_page.h`, M4.5)
 
 `GET /` 가 단일 HTML/JS 페이지를 돌려준다(PROGMEM). 토큰은 브라우저 localStorage 에만 저장하고, 모든 동작은 `/api/v1` 을 Bearer 토큰으로 호출한다. http 페이지라 `crypto.randomUUID` 가 없어 `getRandomValues` 로 UUID 를 만든다. 페이지를 고치면 재업로드.

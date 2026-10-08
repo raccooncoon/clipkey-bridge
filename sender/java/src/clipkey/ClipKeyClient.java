@@ -66,15 +66,15 @@ public final class ClipKeyClient {
         return u;
     }
 
-    public Job submit(String text, boolean appendEnter, boolean autoStart, int delayMs)
+    public Job submit(String text, boolean appendEnter, boolean autoStart, int delayMs, String imeToggle)
             throws IOException, InterruptedException {
-        return submit(UUID.randomUUID().toString(), text, appendEnter, autoStart, delayMs);
+        return submit(UUID.randomUUID().toString(), text, appendEnter, autoStart, delayMs, imeToggle);
     }
 
-    public Job submit(String requestId, String text, boolean appendEnter, boolean autoStart, int delayMs)
+    public Job submit(String requestId, String text, boolean appendEnter, boolean autoStart, int delayMs, String imeToggle)
             throws IOException, InterruptedException {
         HttpRequest req = request("/api/v1/type?appendEnter=" + appendEnter + "&autoStart=" + autoStart
-                        + "&delayMs=" + delayMs)
+                        + "&delayMs=" + delayMs + "&imeToggle=" + imeToggle)
                 .header("Content-Type", "text/plain; charset=utf-8")
                 .header("X-Request-Id", requestId)
                 .POST(HttpRequest.BodyPublishers.ofString(text, StandardCharsets.UTF_8)).build();

@@ -19,6 +19,7 @@ import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -48,6 +49,7 @@ public final class ClipKeyApp {
     private final JCheckBox enter = new JCheckBox("마지막 Enter 추가", Settings.appendEnter());
     private final JCheckBox auto = new JCheckBox("버튼 없이 2초 후 자동 입력", Settings.autoStart());
     private final JSpinner delay = new JSpinner(new SpinnerNumberModel(Settings.delayMs(), 10, 100, 10));
+    private final JComboBox<String> ime = new JComboBox<>(new String[]{"lang1", "ralt"});
     private final JProgressBar progress = new JProgressBar(0, 1);
     private final JLabel status = new JLabel(" ");  // 진행 상태 문구. 바 위에 그리면 겹쳐 보여 따로 둔다
     private final JButton reload = new JButton("클립보드 다시 읽기");
@@ -97,6 +99,10 @@ public final class ClipKeyApp {
         options.add(auto);
         options.add(new JLabel("글자 간격(ms)"));
         options.add(delay);
+        ime.setSelectedItem(Settings.imeToggle());
+        ime.setToolTipText("한글 입력 시 한/영 전환 키. lang1 = 한/영 키, ralt = 오른쪽 Alt (101키 Type3 배열)");
+        options.add(new JLabel("한/영 키"));
+        options.add(ime);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         buttons.add(reload);
@@ -167,7 +173,7 @@ public final class ClipKeyApp {
         String problem = ClipKeyText.problem(t);
         boolean ok = problem == null;
         info.setForeground(ok ? UIManager.getColor("Label.foreground") : new Color(0xB00020));
-        info.setText((ok ? t.length() + "자, " + (t.split("\n", -1).length) + "줄" : problem) + (edited ? "  (편집됨)" : ""));
+        info.setText((ok ? ClipKeyText.chars(t) + "자, " + (t.split("\n", -1).length) + "줄" : problem) + (edited ? "  (편집됨)" : ""));
         send.setEnabled(ok && activeJob == null);
     }
 
@@ -178,11 +184,12 @@ public final class ClipKeyApp {
         if (client == null) return;
         boolean appendEnter = enter.isSelected(), autoStart = auto.isSelected();
         int delayMs = (Integer) delay.getValue();
-        Settings.save(Settings.url(), Settings.token(), delayMs, appendEnter, autoStart);
+        String imeToggle = (String) ime.getSelectedItem();
+        Settings.save(Settings.url(), Settings.token(), delayMs, appendEnter, autoStart, imeToggle);
         setBusy(true);
         progress.setValue(0);
         status.setText("등록 중…");
-        run(() -> client.submit(text, appendEnter, autoStart, delayMs), job -> {
+        run(() -> client.submit(text, appendEnter, autoStart, delayMs, imeToggle), job -> {
             activeJob = job.requestId();
             showJob(job);
             poller.start();
@@ -245,6 +252,7 @@ public final class ClipKeyApp {
         preview.setEditable(!busy);
         enter.setEnabled(!busy);
         auto.setEnabled(!busy);
+        ime.setEnabled(!busy);
         delay.setEnabled(!busy);
     }
 
@@ -291,7 +299,7 @@ public final class ClipKeyApp {
             try {
                 ClipKeyClient.parseBase(url.getText());
                 Settings.save(url.getText(), new String(token.getPassword()), (Integer) delay.getValue(),
-                        enter.isSelected(), auto.isSelected());
+                        enter.isSelected(), auto.isSelected(), (String) ime.getSelectedItem());
                 dialog.dispose();
                 refreshDevice();
             } catch (IllegalArgumentException ex) {
