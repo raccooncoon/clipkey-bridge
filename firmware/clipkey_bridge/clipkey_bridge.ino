@@ -24,9 +24,13 @@
 #include "USBHIDKeyboard.h"
 #include "secrets.h"
 
+#ifndef CLIPKEY_ALLOW_AUTO_START
+#define CLIPKEY_ALLOW_AUTO_START false
+#endif
+
 namespace {
 
-constexpr char FIRMWARE_VERSION[] = "0.1.0-m4.3";
+constexpr char FIRMWARE_VERSION[] = "0.1.0-m4.4";
 constexpr char HOSTNAME[] = "clipkey";
 constexpr uint16_t HTTP_PORT = 80;
 constexpr char API_PREFIX[] = "/api/v1/";
@@ -42,6 +46,7 @@ constexpr uint32_t RESULT_FLASH_MS = 1500;
 
 constexpr size_t MAX_TEXT_BYTES = 4096;
 constexpr uint32_t WAIT_TIMEOUT_MS = 60000;      // 승인 대기 만료
+constexpr uint32_t AUTO_START_DELAY_MS = 2000;   // autoStart 작업의 취소 가능 창
 constexpr uint32_t JOB_RETENTION_MS = 600000;    // 최근 요청 보관 (중복 방지·상태 조회)
 constexpr size_t JOB_HISTORY_SIZE = 16;
 constexpr int DEFAULT_DELAY_MS = 20, MIN_DELAY_MS = 10, MAX_DELAY_MS = 100;
@@ -77,6 +82,7 @@ struct Job {
   String requestId;
   String text;
   bool appendEnter = false;
+  bool autoStart = false;
   int delayMs = DEFAULT_DELAY_MS;
   JobState state = JobState::COMPLETED;
   size_t typed = 0;
@@ -178,11 +184,12 @@ void maintainMdns() {
 
 // ---------- 작업 기록 ----------
 
-uint32_t fnv1a(const String& s, bool appendEnter, int delayMs) {
+uint32_t fnv1a(const String& s, bool appendEnter, bool autoStart, int delayMs) {
   uint32_t h = 2166136261u;
   auto mix = [&](uint8_t b) { h = (h ^ b) * 16777619u; };
   for (size_t i = 0; i < s.length(); ++i) mix(s[i]);
   mix(appendEnter);
+  mix(autoStart);
   mix(delayMs);
   return h;
 }
@@ -250,6 +257,8 @@ void maintainJob() {
   if (!job.active()) return;
   if (!usbMounted) {
     finishJob(JobState::FAILED, "usb_disconnected");
+  } else if (job.state == JobState::WAITING && job.autoStart && millis() - job.createdAt >= AUTO_START_DELAY_MS) {
+    startTyping();
   } else if (job.state == JobState::WAITING && millis() - job.createdAt > WAIT_TIMEOUT_MS) {
     finishJob(JobState::CANCELLED, "expired");
   } else if (job.state == JobState::TYPING) {
@@ -272,8 +281,9 @@ bool pressedEdge(Debounce& d, bool reading, uint32_t now) {
 
 void maintainButton() {
   if (!pressedEdge(button, digitalRead(BUTTON_PIN) == LOW, millis())) return;
-  if (job.state == JobState::WAITING) startTyping();
-  else if (job.state == JobState::TYPING) finishJob(JobState::CANCELLED, "button");
+  // autoStart 대기 중의 버튼은 승인이 아니라 취소다
+  if (job.state == JobState::WAITING && !job.autoStart) startTyping();
+  else if (job.active()) finishJob(JobState::CANCELLED, "button");
 }
 
 // ---------- HTTP 공통 ----------
@@ -350,17 +360,19 @@ void handleType() {
   if (!requireAuth()) return;
   const String id = server.header("X-Request-Id");
   const String text = server.arg("plain");
-  bool appendEnter = false;
+  bool appendEnter = false, autoStart = false;
   int delayMs = DEFAULT_DELAY_MS;
   if (!isUuid(id)) return sendError(400, "invalid_request_id");
-  if (!parseBool(server.arg("appendEnter"), appendEnter) || !parseDelay(server.arg("delayMs"), delayMs)) {
+  if (!parseBool(server.arg("appendEnter"), appendEnter) || !parseBool(server.arg("autoStart"), autoStart)
+      || !parseDelay(server.arg("delayMs"), delayMs)) {
     return sendError(400, "invalid_option");
   }
+  if (autoStart && !CLIPKEY_ALLOW_AUTO_START) return sendError(400, "auto_start_disabled");
   if (text.length() > MAX_TEXT_BYTES) return sendError(413, "too_large");
   if (text.isEmpty()) return sendError(400, "empty_body");
   if (!isTypable(text)) return sendError(400, "unsupported_character");
 
-  const uint32_t hash = fnv1a(text, appendEnter, delayMs);
+  const uint32_t hash = fnv1a(text, appendEnter, autoStart, delayMs);
   if (JobRecord* dup = findRecord(id)) {
     if (dup->hash != hash) return sendError(409, "request_id_reused");
     return sendJson(202, jobJson(*dup, dup->state == JobState::WAITING));  // 같은 요청 재전송: 다시 입력하지 않음
@@ -374,12 +386,13 @@ void handleType() {
   job.requestId = id;
   job.text = text;
   job.appendEnter = appendEnter;
+  job.autoStart = autoStart;
   job.delayMs = delayMs;
   job.total = text.length() + (appendEnter ? 1 : 0);
   job.state = JobState::WAITING;
   job.createdAt = millis();
   *rec = JobRecord{id, hash, JobState::WAITING, 0, job.total, nullptr, job.createdAt, true};
-  Serial.printf("[job] WAITING chars=%u enter=%d delay=%d\n", (unsigned)job.total, appendEnter, delayMs);
+  Serial.printf("[job] WAITING chars=%u enter=%d auto=%d delay=%d\n", (unsigned)job.total, appendEnter, autoStart, delayMs);
   sendJson(202, jobJson(*rec, true));
 }
 
